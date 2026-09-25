@@ -1,0 +1,13 @@
+# сборка / build
+*.exe
+_build/
+build/
+dist/
+*.spec
+icon.ico
+__pycache__/
+*.pyc
+
+# отладка / debug output
+debug/
+record/
