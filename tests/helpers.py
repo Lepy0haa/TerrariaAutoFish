@@ -84,7 +84,11 @@ class FakeGame:
         self.sonar_now = False                       # надпись сонара есть, а поплавок ещё не нырнул
         self.catch_text = None                       # что поймано: (текст, цвет) — надпись о подборе
         self.pickup_until = 0.0                      # до какого времени видна надпись о подборе
+        self.drop_keys = 0                           # столько следующих нажатий игра пропустит
         self.pickup_life = 1.5                       # сколько секунд видна надпись о подборе
+        self.shift = (0, 0)                          # мир сдвинулся на экране (персонажа сдвинуло)
+        self.need_cast = None                        # поплавок сядет на воду, только если заброс сюда
+        self.cast_at = None
         self.selected = selected
         self.clicks, self.keys, self.used = [], [], []
         self.cursor = (self.BX, self.OFF)
@@ -92,17 +96,24 @@ class FakeGame:
 
     def screen(self):
         s = self.canvas.copy()
+        if self.shift != (0, 0) or getattr(self, "terrain", False):
+            s = self.world()
         bar = _hotbars.get(self.selected)
         if bar is None:
             bar = hotbar(self.selected)
         bar = bar[:148, :self.W]
         s[:bar.shape[0], :bar.shape[1]] = bar
+        dx, dy = self.shift
         if self.decoy:                               # яркий квадрат рядом с поплавком (не поплавок)
-            s[self.BY - 14:self.BY - 2, self.BX + 28:self.BX + 40] = (40, 40, 220)
-        if self.out and not self.empty:
+            s[self.BY + dy - 14:self.BY + dy - 2, self.BX + dx + 28:self.BX + dx + 40] = (40, 40, 220)
+        landed = self.need_cast is None or (self.cast_at is not None and
+                                            max(abs(self.cast_at[0] - self.need_cast[0]),
+                                                abs(self.cast_at[1] - self.need_cast[1])) <= 6)
+        if self.out and not self.empty and landed:
             fly = time.time() - self.cast_t
             cx, cy = ((self.BX, self.BY) if fly > 0.8 else
                       (int(self.BX - 40 * (0.8 - fly)), int(self.BY - 30 * (0.8 - fly))))
+            cx, cy = cx + dx, cy + dy
             s[cy - 16:cy + 16, cx - 17:cx + 17] = self.patch
         if self.out and (self.empty or self.sonar_now) and self.bite_text:   # клюнуло — над поплавком название (сонар)
             import textimg
@@ -113,6 +124,21 @@ class FakeGame:
         if self.night:
             s = s * 0.3 + np.array([30, 28, 26], np.float32)
         return s
+
+    def world(self):
+        """Вода с «рельефом» (неповторяющиеся блоки над водой), сдвинутая на self.shift."""
+        if getattr(self, "_terrain", None) is None:
+            t = self.canvas.copy()
+            rng = np.random.default_rng(7)
+            spots = [(150, self.OFF - 30)] * 60 + [(self.OFF + 62, self.H - 30)] * 40   # над водой и дно
+            for lo, hi in spots:                      # тусклые (не яркие, как поплавок) блоки и стены
+                x, y = int(rng.integers(0, self.W - 40)), int(rng.integers(lo, hi))
+                w, h = int(rng.integers(10, 40)), int(rng.integers(8, 30))
+                v = float(rng.integers(40, 120))
+                t[y:y + h, x:x + w] = (v, v * 1.05, v * 1.1)
+            self._terrain = t
+        dx, dy = self.shift
+        return np.roll(self._terrain, (dy, dx), axis=(0, 1))
 
     def click(self, x, y, hold=0.06):
         with self.lock:
@@ -128,9 +154,13 @@ class FakeGame:
                 self.out = True
                 self.cast_t = time.time()
                 self.clicks.append("заброс")
+                self.cast_at = (x, y)
 
     def press_key(self, name):
         self.keys.append(name)
+        if self.drop_keys:                           # нажатие «потерялось» — игра его не заметила
+            self.drop_keys -= 1
+            return
         if name in "1234567890" and len(name) == 1:
             self.selected = name
             self.out = False                         # сменили предмет — игра убирает поплавок

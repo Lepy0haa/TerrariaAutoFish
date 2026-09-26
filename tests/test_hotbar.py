@@ -91,6 +91,52 @@ class TestHotbar(unittest.TestCase):
             af.ROD_SLOT = old
             restore()
 
+    def test_lost_key_press_is_retried(self):
+        # из журнала игрока: «Нажал 5, чтобы взять удочку, но слот не сменился» — нажатие
+        # потерялось; теперь программа нажимает ещё раз
+        game = helpers.FakeGame(selected="1")
+        restore = game.install()
+        try:
+            af.ROD_SLOT = ROD
+            f = af.Fisher()
+            f.hotbar_frame = lambda sct, cl: game.screen()[:200, :game.W]
+            game.drop_keys = 1
+            self.assertTrue(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(game.keys, ["5", "5"])
+            self.assertEqual(f.cast_slot, ROD)
+            self.assertEqual(f.rod_misses, 0)
+            # игра не активна — не жмём ничего (нажатие ушло бы в другое окно)
+            game.selected, game.keys = "1", []
+            af.terraria_window = lambda: None
+            self.assertFalse(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(game.keys, [])
+        finally:
+            af.ROD_SLOT = None
+            restore()
+
+    def test_rod_misses_expire(self):
+        game = helpers.FakeGame(selected="1")
+        restore = game.install()
+        old = af.ROD_KEY_WAITS
+        try:
+            af.ROD_SLOT, af.ROD_KEY_WAITS = ROD, (0.01,)
+            f = af.Fisher()
+            f.hotbar_frame = lambda sct, cl: game.screen()[:200, :game.W]
+            game.drop_keys = 100                              # игра не реагирует на цифры
+            for _ in range(3):
+                f.ensure_rod(None, (0, 0, game.W, game.H))
+            self.assertEqual(f.rod_misses, 3)
+            game.keys = []
+            f.ensure_rod(None, (0, 0, game.W, game.H))
+            self.assertEqual(game.keys, [])                   # пока не пытаемся
+            f.rod_miss_time -= af.ROD_RETRY_AFTER + 1          # прошло две минуты
+            game.drop_keys = 0
+            self.assertTrue(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(f.cast_slot, ROD)
+        finally:
+            af.ROD_SLOT, af.ROD_KEY_WAITS = None, old
+            restore()
+
     def test_rod_already_in_hand(self):
         game = helpers.FakeGame(selected="5")
         restore = game.install()

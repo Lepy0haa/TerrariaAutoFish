@@ -250,8 +250,8 @@ EN = {
     "В руках был другой предмет (слот %d) — взял удочку (слот %s).":
         "Another item was selected (slot %d) — switched to the fishing rod (slot %s).",
     "Нажал %s, чтобы взять удочку, но слот не сменился.": "Pressed %s to take the fishing rod, but the slot didn't change.",
-    "Не получается взять удочку клавишей — больше не переключаю. Возьмите удочку в руки сами.":
-        "Can't switch to the fishing rod with a key — not trying anymore. Please select the rod yourself.",
+    "Не получается взять удочку клавишей — пару минут не переключаю. Возьмите удочку в руки сами.":
+        "Can't switch to the fishing rod with a key — not trying for a couple of minutes. Please select the rod yourself.",
     "Не получается взять удочку. Возьмите её в руки сами.": "Can't switch to the fishing rod. Please select it yourself.",
     "Поплавок нашёлся сам: %s (совпадение %.2f), %s. Дальше — автоматически.":
         "Found the bobber by myself: %s (match %.2f), %s. Automatic from now on.",
@@ -417,8 +417,6 @@ EN = {
     "Нажал %s, чтобы взять зелье, но слот не сменился.": "Pressed %s to take the potion, but the slot didn't change.",
     "Не вижу баффа «%s» после зелья из хотбара — зелье кончилось или не выпилось.":
         "No «%s» buff after the potion from the hotbar — out of potions or it wasn't drunk.",
-    "Нет «%s» в хотбаре — положите зелье в хотбар.": "No «%s» in the hotbar — put the potion into the hotbar.",
-    "Нет «%s» в хотбаре.": "No «%s» in the hotbar.",
     "Пить": "Drink",
     "Хотбар не виден (открыт инвентарь?) — зелья из хотбара не выпить.":
         "The hotbar isn't visible (inventory open?) — can't drink potions from the hotbar.",
@@ -460,6 +458,33 @@ EN = {
         "Settings → Video → \"Heat Distortion\".",
     "Поймал: %s (ещё один — к надписи прибавилось число).":
         "Caught: %s (one more — the number on the text went up).",
+    "Нет в хотбаре: %s — положите зелья в хотбар.": "Not in the hotbar: %s — put the potions into the hotbar.",
+    "Нет в хотбаре: %s.": "Not in the hotbar: %s.",
+    "Напоминать, если нужного зелья нет в хотбаре (не чаще раза в 10 мин)":
+        "Remind me when a needed potion isn't in the hotbar (at most every 10 min)",
+    # --- окошко поверх игры: режим работы
+    "Режим записи: подсекаете вы, программа записывает": "Record mode: you hook, the program records",
+    "биом определяю": "detecting the biome",
+    "Улов: только отмеченное (сонар) · %s": "Catch: only checked (sonar) · %s",
+    "Улов: всё подряд": "Catch: everything",
+    "Задание рыбака: %s": "Angler quest: %s",
+    "Зелья: %s (%s)": "Potions: %s (%s)",
+    "не выбраны": "none selected",
+    "  нет в хотбаре: %s": "  not in the hotbar: %s",
+    "урон": "damage",
+    "наживка": "bait",
+    "полный инвентарь": "full inventory",
+    "Слежу: %s": "Watching: %s",
+    "через %d мин": "in %d min",
+    "после %d подсечек": "after %d hooks",
+    " или ": " or ",
+    ", потом выключу ПК": ", then shut down the PC",
+    "Стоп: %s": "Stop: %s",
+    "Последний улов: %s": "Last catch: %s",
+    "Картинка сдвинулась на %+d, %+d пикс. — наверное, персонажа сдвинуло. Переношу точку "
+    "заброса и поплавка туда же.":
+        "The picture moved by %+d, %+d px — the character was probably pushed. Moving the cast point "
+        "and the bobber mark along.",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

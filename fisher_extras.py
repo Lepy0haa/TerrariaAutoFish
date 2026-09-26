@@ -127,6 +127,25 @@ class ExtrasMixin:
         self.emit("buffs", status=status)
         return status
 
+    def report_absent(self, absent):
+        """Нужных зелий нет в хотбаре: одно сообщение на все сразу. Повторяем, только если список
+        изменился или раз в POTION_NAG_EVERY секунд (а не каждую минуту про каждое зелье)."""
+        key = tuple(sorted(absent))
+        changed = key != self.absent_potions
+        self.absent_potions = key
+        if changed:
+            self.emit("absent", potions=list(key))
+        if not key or not A.POTION_REMIND:
+            return
+        now = time.time()
+        if not changed and now - self.absent_told < A.POTION_NAG_EVERY:
+            return
+        self.absent_told = now
+        names = ", ".join(tr(A.BUFF_NAMES[n]) for n in key)
+        self.log(tr("Нет в хотбаре: %s — положите зелья в хотбар.") % names, "bad")
+        if changed:
+            self.emit("notify", title=tr("Зелья"), text=tr("Нет в хотбаре: %s.") % names)
+
     def potion_slots(self, frame):
         """Какие зелья лежат в хотбаре: {зелье: номер слота}. Слот засчитываем зелью, только если
         он похож именно на него больше, чем на другие зелья, и достаточно сильно."""
@@ -158,11 +177,12 @@ class ExtrasMixin:
         if back is None:
             back = sel[0]                        # вернём то, что было в руках (обычно удочка)
         drank, left = [], []
+        absent = [n for n in missing if n not in slots]
+        for n in absent:
+            self.buff_backoff[n] = now + A.POTION_RETRY
+        self.report_absent(absent)
         for n in missing:
             if n not in slots:
-                self.buff_backoff[n] = now + A.POTION_RETRY
-                self.log(tr("Нет «%s» в хотбаре — положите зелье в хотбар.") % tr(A.BUFF_NAMES[n]), "bad")
-                self.emit("notify", title=tr("Зелья"), text=tr("Нет «%s» в хотбаре.") % tr(A.BUFF_NAMES[n]))
                 continue
             key = str((slots[n] + 1) % 10)
             A.press_key(key)

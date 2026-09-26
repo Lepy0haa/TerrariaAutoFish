@@ -122,6 +122,28 @@ class TestReportAndWizard(unittest.TestCase):
         self.assertEqual([r[1] for r in rows], [5, 2])
         self.assertIn("8", app.App.catch_summary(Fake()))
 
+    def test_overlay_mode_lines(self):
+        import app
+        c = catches.Catches(os.path.join(af.ASSET_DIR, "fishing", "catches.json"))
+        cfg = dict(app.DEFAULTS, sonar_filter=True, catch_biome="auto", quest_fish=2315, buffs_on=True,
+                   buff_fishing=True, buff_crate=True, buff_sonar=False, buff_calm=False, buff_method="hotbar",
+                   health_guard=True, bait_watch=False, inv_full_stop=True, stop_after_min=60,
+                   stop_after_hooks=0, shutdown_after=True, record=False)
+
+        class Fake:
+            pass
+        f = Fake()
+        f.cfg, f.catch_data, f.catch_info, f.last_caught, f.absent = cfg, c, {"biome": "lava"}, "Обсидирыба", ["crate"]
+        text = " | ".join(app.App.mode_lines(f))
+        for part in ("сонар", "Лава", "авто", "Задание рыбака", "рыбалки, ящиков", "из хотбара",
+                     "нет в хотбаре: ящиков", "урон, полный инвентарь", "через 60 мин", "выключу ПК",
+                     "Последний улов: Обсидирыба"):
+            self.assertIn(part, text)
+        cfg.update(sonar_filter=False, buffs_on=False, health_guard=False, inv_full_stop=False, stop_after_min=0,
+                   quest_fish=None)
+        f.last_caught = None
+        self.assertEqual(app.App.mode_lines(f), [af.tr("Улов: всё подряд")])
+
     def test_wizard_pages(self):
         pages = wizard.pages("HOME", "END")
         self.assertEqual(len(pages), 4)

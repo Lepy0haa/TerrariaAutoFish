@@ -258,6 +258,8 @@ class BiteDetector:
         if t < A.CALIB_TIME or not old:
             return None
         self.ref = float(np.median(old))
+        if self.ref < 1:
+            return None                               # поплавка с самого начала не видно — сравнивать не с чем
         self.calm.append((t, self.seen / self.ref))
         if self.auto and t >= A.CALIB_NOW and t - self.last_calib >= 0.5:
             # подстройка на лету: по спокойной воде этого заброса (без покачивания после

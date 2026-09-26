@@ -68,6 +68,12 @@ class TestBites(unittest.TestCase):
         self.check_all_caught(0.38, auto=False)
         self.check_all_caught(0.38, auto=True)
 
+    def test_bobber_invisible_from_start(self):
+        # поплавка не видно с самого начала слежения — раньше тут было деление на ноль (ошибка
+        # и перезапуск круга), теперь просто нечего сравнивать
+        t, _, _ = replay(synth(lambda t: 0, 3.0), 0.6)
+        self.assertIsNone(t)
+
     def test_no_bite_on_calm_water(self):
         # всё, что было раньше чем за 1.5 с до подсечки, — спокойная вода: срабатываний нет
         for f in self.files:

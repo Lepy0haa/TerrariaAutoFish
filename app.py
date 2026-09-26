@@ -44,6 +44,7 @@ DEFAULTS = {
     "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
     "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
     "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
+    "potion_remind": True,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -265,7 +266,10 @@ class Overlay(tk.Toplevel):
         self.hint.pack(fill="x", padx=10)
         self.bar = Bar(self, width=250, height=10)
         self.bar.pack(padx=10, pady=(4, 8))
-        for w in (self, top, self.title, self.hint, self.count, self.dot):
+        # режим работы: что ловим, зелья, что отслеживается, когда остановиться
+        self.mode = tk.Label(self, text="", bg=C["panel"], fg=C["muted"], font=(FONT, 8),
+                             wraplength=250, justify="left", anchor="w")
+        for w in (self, top, self.title, self.hint, self.count, self.dot, self.mode):
             w.bind("<ButtonPress-1>", self.drag_start)
             w.bind("<B1-Motion>", self.drag)
             w.bind("<ButtonRelease-1>", self.drag_end)
@@ -297,6 +301,13 @@ class Overlay(tk.Toplevel):
         self.app.cfg["overlay_pos"] = [self.winfo_x(), self.winfo_y()]
         save_cfg(self.app.cfg)
 
+    def set_mode(self, lines):
+        if lines:
+            self.mode.config(text="\n".join(lines))
+            self.mode.pack(fill="x", padx=10, pady=(0, 8))
+        else:
+            self.mode.pack_forget()
+
     def set_state(self, state, title, hint):
         self.dot.delete("all")
         self.dot.create_oval(1, 1, 11, 11, fill=STATE_COLOR.get(state, C["muted"]), width=0)
@@ -324,6 +335,8 @@ class App:
         self.gear = {"rod_slot": None, "manual": False, "bobber": None}
         self.bait = None                  # сколько цифр наживки видно на удочке
         self.catch_info = None            # последнее, что прочитал сонар
+        self.last_caught = None           # название последнего подобранного улова
+        self.absent = []                  # каких нужных зелий нет в хотбаре
         self.tray = None                  # значок в трее
         self.update_url = None
         self.calib = {"ratio": af.SINK_RATIO, "casts": 0, "auto": af.AUTO_CALIB}
@@ -429,6 +442,8 @@ class App:
         af.QUEST_FISH = self.cfg.get("quest_fish")
         af.BUFF_KEY = self.cfg["buff_key"]
         af.BUFF_METHOD = self.cfg["buff_method"]
+        af.POTION_REMIND = bool(self.cfg["potion_remind"])
+        self.refresh_mode()
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
         af.MAX_WAIT = float(self.cfg["max_wait"])
         af.SOUND = bool(self.cfg["sound"])
@@ -719,6 +734,7 @@ class App:
             ttk.Checkbutton(grid, text=text, variable=var,
                             command=lambda k=key, v=var: self.set_auto_opt(k, v.get())).grid(
                 row=i // 2, column=i % 2, sticky="w", padx=(0, 30))
+        check("potion_remind", tr("Напоминать, если нужного зелья нет в хотбаре (не чаще раза в 10 мин)"))
         row = ttk.Frame(box, style="Card.TFrame")
         row.pack(fill="x", pady=(6, 0))
         ttk.Label(row, text=tr("Пить"), style="Card.TLabel").pack(side="left")
@@ -1001,6 +1017,58 @@ class App:
             self.fisher.rod_misses = 0
             self.fisher.gear_changed()
 
+    def mode_lines(self):
+        """Режим работы для окошка поверх игры: что ловим, где, зелья, что отслеживается, когда стоп."""
+        c, ru = self.cfg, i18n.LANG == "ru"
+        lines = []
+        if c.get("record"):
+            lines.append(tr("Режим записи: подсекаете вы, программа записывает"))
+        data = getattr(self, "catch_data", None)
+
+        def group(key):
+            g = data.group.get(key) if data else None
+            return (g["ru"] if ru else g["en"]) if g else key
+
+        if c["sonar_filter"]:
+            if c["catch_biome"] != "auto":
+                where = group(c["catch_biome"])
+            else:
+                b = (self.catch_info or {}).get("biome")
+                where = (group(b) + tr(" (авто)")) if b else tr("биом определяю")
+            lines.append(tr("Улов: только отмеченное (сонар) · %s") % where)
+        else:
+            lines.append(tr("Улов: всё подряд"))
+        quest = c.get("quest_fish")
+        if quest is not None and data and quest in data.items:
+            it = data.items[quest]
+            lines.append(tr("Задание рыбака: %s") % (it["ru"] if ru else it["en"]))
+        if c["buffs_on"]:
+            names = {"fishing": tr("рыбалки"), "crate": tr("ящиков"), "sonar": tr("сонара"),
+                     "calm": tr("спокойствия")}
+            on = [names[n] for n in ("fishing", "crate", "sonar", "calm") if c["buff_" + n]]
+            how = tr("из хотбара") if c["buff_method"] == "hotbar" else tr("быстрым баффом")
+            lines.append(tr("Зелья: %s (%s)") % (", ".join(on) or tr("не выбраны"), how))
+            if self.absent:
+                lines.append(tr("  нет в хотбаре: %s") % ", ".join(names.get(n, n) for n in self.absent))
+        watch = [t for k, t in (("health_guard", tr("урон")), ("bait_watch", tr("наживка")),
+                                ("inv_full_stop", tr("полный инвентарь"))) if c[k]]
+        if watch:
+            lines.append(tr("Слежу: %s") % ", ".join(watch))
+        stop = []
+        if int(c["stop_after_min"]):
+            stop.append(tr("через %d мин") % int(c["stop_after_min"]))
+        if int(c["stop_after_hooks"]):
+            stop.append(tr("после %d подсечек") % int(c["stop_after_hooks"]))
+        if stop:
+            lines.append(tr("Стоп: %s") % tr(" или ").join(stop) + (tr(", потом выключу ПК") if c["shutdown_after"] else ""))
+        if self.last_caught:
+            lines.append(tr("Последний улов: %s") % self.last_caught)
+        return lines
+
+    def refresh_mode(self):
+        if getattr(self, "overlay", None) is not None:
+            self.overlay.set_mode(self.mode_lines())
+
     def buff_text(self, status):
         names = {"fishing": tr("рыбалки"), "crate": tr("ящиков"), "sonar": tr("сонара"), "calm": tr("спокойствия")}
         parts = ["%s %s" % (names[n], "✓" if ok else "✗") for n, ok in status.items()]
@@ -1209,11 +1277,13 @@ class App:
         elif key == "record":
             self.fisher.stop_fishing(tr("Режим изменён — начните заново."), notify=False)
             self.fisher.record = self.cfg["record"]
+        self.refresh_mode()
 
     def toggle_overlay(self):
         if self.cfg["overlay"] and self.overlay is None:
             self.overlay = Overlay(self)
             self.overlay.set_state(self.state, self.state_lbl.cget("text"), self.hint_lbl.cget("text"))
+            self.refresh_mode()
         elif not self.cfg["overlay"] and self.overlay is not None:
             self.overlay.destroy()
             self.overlay = None
@@ -1272,10 +1342,17 @@ class App:
             self.show_gear(d)
         elif kind == "catch":
             self.catch_info = d
+            if d.get("caught") and d.get("name"):
+                self.last_caught = d["name"]
             self.show_gear(self.gear)
+            self.refresh_mode()
+        elif kind == "absent":
+            self.absent = d["potions"]
+            self.refresh_mode()
         elif kind == "bait":
             self.bait = d["digits"]
             self.show_gear(self.gear)
+            self.refresh_mode()
         elif kind == "shutdown":
             self.cancel_btn.state(["!disabled"] if d["seconds"] else ["disabled"])
             if d["seconds"] and self.cfg["toasts"]:

@@ -199,3 +199,67 @@ class SearchMixin:
         self.log(tr("Узнал поплавок по картинке (%s, совпадение %.2f).")
                  % (self.bobber_sprites.title(self.bobber_kind), best[0]))
         return zone["left"] + x + tw // 2, zone["top"] + y + th // 2
+
+    # ---------- сдвиг картинки (персонажа сдвинуло, камера уехала) ----------
+    def scene_region(self, cl, pos):
+        """Место рыбалки: от точки заброса до поплавка и вокруг, в пределах окна игры."""
+        s = self.scale
+        cx, cy = self.cast_point
+        x0 = max(cl[0], min(cx, pos[0]) - int(170 * s))
+        x1 = min(cl[2], max(cx, pos[0]) + int(170 * s))
+        y0 = max(cl[1], min(cy, pos[1]) - int(130 * s))
+        y1 = min(cl[3], max(cy, pos[1]) + int(110 * s))
+        if x1 - x0 < 64 or y1 - y0 < 64:
+            return None
+        return {"left": x0, "top": y0, "width": x1 - x0, "height": y1 - y0}
+
+    def remember_scene(self, sct, cl, player, pos):
+        """После удачного поиска поплавка: снимок места рыбалки — без персонажа (камера держит его в
+        центре, при сдвиге он не двигается) и без поплавка с курсором (они бывают и не бывают)."""
+        self.scene = None
+        if not A.FOLLOW_SHIFT or self.cast_point is None:
+            return
+        import sceneshift
+        reg = self.scene_region(cl, pos)
+        if reg is None:
+            return
+        g = sceneshift.gray(A.grab(sct, reg))
+        mask = np.ones(g.shape, bool)
+        s = self.scale
+        for (px, py), hx, hy in ((player, int(45 * s), int(70 * s)), (pos, self.tw, self.th),
+                                 (self.park or player, int(25 * s), int(25 * s))):
+            px, py = px - reg["left"], py - reg["top"]
+            mask[max(0, py - hy):max(0, py + hy), max(0, px - hx):max(0, px + hx)] = False
+        if mask.mean() > 0.5:
+            self.scene = (reg, g, mask)
+
+    def follow_shift(self, sct, cl):
+        """Поплавок не нашёлся: не сдвинулась ли вся картинка? Сдвинулась уверенно — переносим точку
+        заброса и отметку поплавка на столько же и пробуем снова (это не неудачный заброс)."""
+        if not A.FOLLOW_SHIFT or self.scene is None or self.cast_point is None:
+            return False
+        import sceneshift
+        reg, g0, mask = self.scene
+        if not A.inside(reg, cl):
+            return False
+        r = sceneshift.estimate(g0, sceneshift.gray(A.grab(sct, reg)), mask)
+        if r is None:
+            return False
+        dx, dy, peak = r
+        if abs(dx) + abs(dy) < A.SHIFT_MIN or abs(dx) > reg["width"] // 3 or abs(dy) > reg["height"] // 3:
+            return False
+        cx, cy = self.cast_point[0] + dx, self.cast_point[1] + dy
+        if not (cl[0] + 10 <= cx < cl[2] - 10 and cl[1] + 10 <= cy < cl[3] - 10):
+            return False                          # точка заброса уехала за край окна — не угнаться
+        self.cast_point = (cx, cy)
+        for name in ("mark", "mark0"):
+            p = getattr(self, name)
+            if p is not None:
+                setattr(self, name, (p[0] + dx, p[1] + dy))
+        self.scene = None
+        self.phase, self.watched = "unknown", None
+        self.shifts += 1
+        self.log(tr("Картинка сдвинулась на %+d, %+d пикс. — наверное, персонажа сдвинуло. Переношу точку "
+                    "заброса и поплавка туда же.") % (dx, dy), "bad")
+        self.save_points()
+        return True

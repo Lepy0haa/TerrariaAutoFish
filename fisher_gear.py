@@ -172,22 +172,33 @@ class GearMixin:
             self.check_bait(frame, sel)
             return False
         if self.rod_misses >= 3:
-            return False                     # переключить не получается — больше не пытаемся
+            if time.time() - self.rod_miss_time < A.ROD_RETRY_AFTER:
+                return False                 # переключить не получается — пока не пытаемся
+            self.rod_misses = 0              # прошло время — попробуем снова
+        if A.terraria_window() is None:
+            return False                     # игра не активна — нажатие ушло бы в другое окно
         key = str((target + 1) % 10)
-        A.press_key(key)
-        time.sleep(0.3)
         self.switched = True
-        sel2 = hotbar.selected_slot(self.hotbar_frame(sct, cl))
-        if sel2 is not None and sel2[0] == target:
-            self.rod_misses = 0
-            self.cast_slot = target
-            self.log(tr("В руках был другой предмет (слот %d) — взял удочку (слот %s).")
-                     % ((sel[0] + 1) % 10, key), "good")
+        # нажатие может «потеряться» (игра была занята, окно только что стало активным) — пробуем
+        # ещё раз и ждём подольше, прежде чем считать, что переключить не получилось
+        for wait in A.ROD_KEY_WAITS:
+            if A.terraria_window() is None:
+                break
+            A.press_key(key)
+            time.sleep(wait)
+            sel2 = hotbar.selected_slot(self.hotbar_frame(sct, cl))
+            if sel2 is not None and sel2[0] == target:
+                self.rod_misses = 0
+                self.cast_slot = target
+                self.log(tr("В руках был другой предмет (слот %d) — взял удочку (слот %s).")
+                         % ((sel[0] + 1) % 10, key), "good")
+                return True
         else:
             self.rod_misses += 1
+            self.rod_miss_time = time.time()
             self.log(tr("Нажал %s, чтобы взять удочку, но слот не сменился.") % key, "bad")
             if self.rod_misses >= 3:
-                self.log(tr("Не получается взять удочку клавишей — больше не переключаю. "
+                self.log(tr("Не получается взять удочку клавишей — пару минут не переключаю. "
                             "Возьмите удочку в руки сами."), "bad")
                 self.emit("notify", title=tr("Удочка"), text=tr("Не получается взять удочку. Возьмите её в руки сами."))
         return True

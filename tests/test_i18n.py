@@ -32,6 +32,13 @@ class Translations(unittest.TestCase):
                     missing.append("%s:%d %r" % (os.path.basename(path), line, text))
         self.assertEqual(missing, [], "нет перевода:\n" + "\n".join(missing))
 
+    def test_no_duplicate_keys(self):
+        with open(os.path.join(ROOT, "i18n.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        table = next(n for n in ast.walk(tree) if isinstance(n, ast.Dict))
+        keys = [k.value for k in table.keys if isinstance(k, ast.Constant)]
+        self.assertEqual(sorted({k for k in keys if keys.count(k) > 1}), [])
+
     def test_same_placeholders(self):
         bad = [k for k, v in i18n.EN.items() if k.count("%") != v.count("%")]
         self.assertEqual(bad, [])

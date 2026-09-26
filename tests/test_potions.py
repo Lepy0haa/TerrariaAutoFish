@@ -83,6 +83,30 @@ class TestPotions(unittest.TestCase):
         self.assertIn("crate", f.buff_backoff)                  # и не будет пробовать каждые 20 с
         self.assertTrue(any(k == "notify" for k, _ in notes))
 
+    def test_absent_potions_one_reminder(self):
+        # из журнала игрока: каждую минуту по три строки «Нет … в хотбаре» — теперь одна строка на
+        # все зелья, и повтор только если список изменился (или раз в 10 минут)
+        f = self.fisher()
+        logs = []
+        f.events = lambda k, d: logs.append(d["text"]) if k == "log" else None
+        f.report_absent(["fishing", "crate", "sonar"])
+        self.assertEqual(len(logs), 1)
+        for n in ("рыбалки", "ящичное", "сонара"):
+            self.assertIn(n, logs[0])
+        f.report_absent(["sonar", "crate", "fishing"])      # тот же список — молчим
+        self.assertEqual(len(logs), 1)
+        f.report_absent(["sonar"])                          # список изменился — одна строка
+        self.assertEqual(len(logs), 2)
+        f.absent_told -= af.POTION_NAG_EVERY + 1            # прошло 10 минут — напомнить
+        f.report_absent(["sonar"])
+        self.assertEqual(len(logs), 3)
+        af.POTION_REMIND = False
+        try:
+            f.report_absent(["fishing"])
+            self.assertEqual(len(logs), 3)
+        finally:
+            af.POTION_REMIND = True
+
     def test_quick_buff_method(self):
         af.BUFF_METHOD = "quick"
         f = self.fisher()
