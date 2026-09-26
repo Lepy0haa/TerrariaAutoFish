@@ -2,7 +2,7 @@
 rem Builds TerrariaAutoFish.exe, the installer and the portable zip into the dist folder.
 rem Requires Python 3.10+.
 cd /d "%~dp0"
-set VER=1.2.3
+set VER=1.2.4
 python -m pip install -r requirements.txt pyinstaller || goto :error
 python app.py --make-icon "%~dp0icon.ico" || goto :error
 

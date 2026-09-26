@@ -110,7 +110,7 @@ does not take focus away from the game.
 | Fishing rod slot | **Auto:** the program remembers the slot from which a cast actually produced a bobber, and keeps it between launches (just hold the rod the first time). If after switching to that slot no bobber appears, the slot is forgotten and learned again. Or choose the slot number yourself |
 | Hotbar snapshot | In 3 s saves the in-game hotbar pixel for pixel to the `hotbar` folder next to the program (and how much each slot looks like a fishing rod) — send such snapshots to help tune fishing rod recognition |
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
-| Don't give up | After 3 failed casts in a row the program doesn't stop but waits 10, 30, then 60 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
+| Don't give up | After 3 failed casts in a row the program doesn't stop but waits 3, 10, then 20 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
 | Watch buffs and drink potions | Every 20 s the program looks for the Fishing and Crate buff icons (top left). If a buff is gone, it presses **Quick Buff** (B by default) and checks that the buff is back. If not — "out of potions?" notification |
 | Quick Buff key | Same as in Terraria's controls |
@@ -132,17 +132,20 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
    brightness and tint don't matter). A match of 75%+ is accepted (a real bobber gives 85–95%,
    empty water about 60%). Otherwise you point at the bobber; the program finds the solid bright
    blob near the cursor. Either way it remembers the bobber's image, colors and type.
-2. **Finding the bobber after each cast.** The program looks for the remembered image near the
+2. **Finding the bobber after each cast.** From 0.6 s after the cast the program looks for the
+   bobber near the mark several times a second and starts watching as soon as it stays in place on
+   two frames in a row — a fish that bites right after the cast is not missed. It looks for the remembered image near the
    mark and checks that there really is a bobber blob there. The image is updated after every cast,
    so sunset and sunrise don't matter. In the dark, color thresholds are adapted to the brightness.
-   If the bobber is not there, the program waits a second and searches three times wider around the
+   If the bobber is not there, the program waits a moment and searches three times wider around the
    original mark, and finally looks for the Wiki image of this particular bobber type.
 3. **Detecting a bite.** The program counts how many pixels of the bobber's colors are visible
    above the water. When a fish bites, the bobber goes under water and fewer of them are visible.
-   Frames with a lightning flash are skipped.
+   Detection works 0.3 s after watching starts. Frames with a lightning flash are skipped. The bar
+   shows the lowest value between its updates, so even a short dip of the bobber is visible.
 4. **Auto-calibration.** While waiting, the program measures how much the bobber "sinks" on waves
-   and in rain. After 2 casts the threshold is set just below that level (median of the last 8
-   casts minus 20%, within 35–75%).
+   and in rain. The threshold is set just below that level (median of the last 8 casts minus 15%,
+   within 35–80%); on the very first cast — from the first second of calm water of that cast.
 5. **Buffs.** Buff icons are drawn semi-transparent over the background, so they are recognized by
    normalized correlation (it doesn't depend on brightness or tint), at any interface scale.
 6. **Hotbar.** The selected hotbar slot is the bright yellow one; its position gives the slot number.

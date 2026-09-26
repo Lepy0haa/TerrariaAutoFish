@@ -121,7 +121,9 @@ EN = {
         "Failed %d times in a row — will try again in %d s (attempt %d of %d).",
     "Восстанавливаюсь…": "Recovering…",
     "Попробую снова через %d с": "Will try again in %d s",
-    "Попробую продолжить через 5 с.": "Will try to continue in 5 s.",
+    "Попробую продолжить через 2 с.": "Will try to continue in 2 s.",
+    "Автокалибровка по этому забросу: подсекаю, когда видно меньше %d%% поплавка.":
+        "Auto-calibration from this cast: hooking when less than %d%% of the bobber is visible.",
     "зелье рыбалки": "fishing potion",
     "ящичное зелье": "crate potion",
     "Выпил: %s.": "Drank: %s.",
@@ -216,8 +218,8 @@ EN = {
     # --- вкладка «Автоматика»
     " Автоматика ": " Automation ",
     "Если что-то пошло не так": "If something goes wrong",
-    "Не сдаваться: после сбоев пробовать снова через 10, 30, 60 с":
-        "Don't give up: after failures try again in 10, 30, 60 s",
+    "Не сдаваться: после сбоев пробовать снова через 3, 10, 20 с":
+        "Don't give up: after failures try again in 3, 10, 20 s",
     "Сам продолжать, когда я вернусь в игру из другого окна":
         "Resume by itself when I return to the game from another window",
     "Следить за баффами и пить зелья, когда бафф закончился": "Watch buffs and drink potions when a buff ends",

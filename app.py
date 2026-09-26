@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -600,7 +600,7 @@ class App:
 
         ttk.Label(box, text=tr("Если что-то пошло не так"), style="Card.TLabel",
                   font=(FONT, 9, "bold")).pack(anchor="w")
-        check("auto_recover", tr("Не сдаваться: после сбоев пробовать снова через 10, 30, 60 с"))
+        check("auto_recover", tr("Не сдаваться: после сбоев пробовать снова через 3, 10, 20 с"))
         check("auto_resume", tr("Сам продолжать, когда я вернусь в игру из другого окна"))
         ttk.Separator(box).pack(fill="x", pady=8)
 

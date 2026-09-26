@@ -43,10 +43,11 @@ RESET_KEY = "delete"  # выбрать новые точки (в приложе�
 
 SCALE = 1.0           # «Масштаб» (Zoom) в настройках игры: 100% -> 1.0, 150% -> 1.5, 200% -> 2.0
 
-SETTLE_TIME = 1.6     # сек. после заброса, пока поплавок упадёт в воду
-CALIB_TIME = 0.6      # сек. замера, сколько поплавка видно обычно
+SETTLE_TIME = 1.6     # сек. после заброса, дольше которых поплавок точно уже в воде
+SETTLE_MIN = 0.6      # сек. после заброса, раньше которых поплавок не ищем (ещё летит)
+CALIB_TIME = 0.3      # сек. замера, сколько поплавка видно обычно
 MAX_WAIT = 45.0       # сек. без поклёвки -> вытащить и забросить заново
-REEL_DELAY = 0.9      # сек. после подсечки до нового заброса
+REEL_DELAY = 0.7      # сек. после подсечки до нового заброса
 POLL = 0.005          # сек. между снимками при ожидании поклёвки
 
 ZONE_X = 40           # насколько далеко от отметки (px при SCALE=1) может упасть поплавок по горизонтали
@@ -62,11 +63,13 @@ SAT_MIN = 60          # ...и быть насыщенным (не серым), �
 FLASH_DIFF = 40       # небо резко сменило цвет (молния) — такие кадры пропускаем
 MAX_FAILS = 3         # столько неудачных забросов подряд -> пауза (кончилась наживка?)
 AUTO_CALIB = True     # автокалибровка: порог подсечки подбирается сам по тому, как качается поплавок
-CALIB_MARGIN = 0.2    #   порог = «спокойный минимум» (сколько поплавка видно на волнах) минус столько
-CALIB_MIN_CASTS = 2   #   после стольких забросов порог начинает подбираться сам
+CALIB_MARGIN = 0.15   #   порог = «спокойный минимум» (сколько поплавка видно на волнах) минус столько
+CALIB_MAX = 0.8       #   ...но не выше этого (и не ниже 0.35)
+CALIB_MIN_CASTS = 1   #   после стольких забросов порог подбирается по прошлым забросам
+CALIB_NOW = 1.0       #   а до того — по текущему: через столько секунд спокойной воды
 
 AUTO_RECOVER = True   # после сбоев не вставать на паузу сразу, а пробовать продолжить
-RECOVER_WAITS = (10, 30, 60)   # сколько секунд ждать перед каждой новой попыткой
+RECOVER_WAITS = (3, 10, 20)    # сколько секунд ждать перед каждой новой попыткой
 AUTO_RESUME = True    # пауза из-за переключения в другое окно — продолжить, когда вернётесь в игру
 RESUME_AFTER = 2.0    #   ...через столько секунд в игре
 
@@ -420,7 +423,10 @@ class BiteDetector:
             return None
         self.sky = self.sky * 0.95 + sky * 0.05       # медленные перемены (закат) — норма
         self.seen = self.visible(frame)
-        old = [v for tt, v in self.hist if tt < t - 0.4]   # «обычно» — без последних 0.4 с
+        # «обычно» — без последних 0.4 с (в самом начале — без последних 0.15 с, чтобы
+        # поклёвку сразу после заброса не пропустить)
+        lag = 0.4 if t > 1.0 else 0.15
+        old = [v for tt, v in self.hist if tt < t - lag]
         self.hist.append((t, self.seen))
         if t < CALIB_TIME or not old:
             return None
@@ -595,7 +601,7 @@ class Fisher:
     def sink_ratio(self):
         """Текущий порог подсечки: подобранный автокалибровкой или заданный вручную."""
         if AUTO_CALIB and len(self.calm_floors) >= CALIB_MIN_CASTS:
-            return float(np.clip(np.median(self.calm_floors) - CALIB_MARGIN, 0.35, 0.75))
+            return float(np.clip(np.median(self.calm_floors) - CALIB_MARGIN, 0.35, CALIB_MAX))
         return SINK_RATIO
 
     def calib_changed(self):
@@ -1158,6 +1164,25 @@ class Fisher:
                 return None
         return None
 
+    def settle(self, sct, cl):
+        """Ждём, пока поплавок сядет на воду, и сразу начинаем следить (рыба бывает клюёт сразу
+        после заброса): с SETTLE_MIN ищем его около отметки, и как только он на одном месте на
+        двух снимках подряд — готово. (центр, непохожесть) или (None, ...) — тогда обычный поиск."""
+        start = time.perf_counter()
+        err, last = float("inf"), None
+        if not self.wait(SETTLE_MIN):
+            return None, err
+        while time.perf_counter() - start < SETTLE_TIME + 0.4:
+            # пока не убедились, что поплавок сел, образец не обновляем (летящий смазан)
+            pos, err = self.search(sct, cl, self.mark, self.zone_x, self.zone_y, strict=True, update=False)
+            if pos and last and max(abs(pos[0] - last[0]), abs(pos[1] - last[1])) <= 2:
+                final, err2 = self.search(sct, cl, pos, self.zone_x // 2, self.zone_y // 2)
+                return (final, err2) if final else (pos, err)
+            last = pos
+            if not self.wait(0.08):
+                return None, err
+        return None, err
+
     def locate(self, sct, cl):
         """Найти поплавок после заброса. Если его нет на обычном месте — подождать (вдруг
         ещё не упал) и поискать шире вокруг места, которое отметил игрок."""
@@ -1165,7 +1190,7 @@ class Fisher:
         if pos:
             return pos, err
         self.state("search", tr("Ищу поплавок"), tr("На обычном месте его нет — ищу вокруг отметки"))
-        if not self.wait(1.0):
+        if not self.wait(0.4):
             return None, err
         pos, err = self.search(sct, cl, self.mark, self.zone_x, self.zone_y)
         if pos:
@@ -1219,8 +1244,8 @@ class Fisher:
                     self.errors += 1
                     self.log(tr("Ошибка: %r") % e, "bad")
                     if AUTO_RECOVER and self.errors <= 3:
-                        self.log(tr("Попробую продолжить через 5 с."))
-                        self.wait(5)
+                        self.log(tr("Попробую продолжить через 2 с."))
+                        self.wait(2)
                         continue
                     self.errors = 0
                     self.emit("notify", title=tr("Ошибка"), text=repr(e))
@@ -1361,10 +1386,10 @@ class Fisher:
                     return
             else:
                 set_cursor(*self.park)
-                if not self.wait(SETTLE_TIME):
-                    return
                 self.state("search", tr("Ищу поплавок"), tr("Мышь не трогайте"))
-                pos, err = self.locate(sct, cl)
+                pos, err = self.settle(sct, cl)
+                if pos is None and not self.stopped():
+                    pos, err = self.locate(sct, cl)
                 if pos is None:
                     if self.stopped():          # поставили на паузу во время поиска — это не неудача
                         return
@@ -1414,6 +1439,8 @@ class Fisher:
         auto_t = auto_why = None
         max_wait = 120.0 if self.record else MAX_WAIT
         start = last_live = time.perf_counter()
+        live_min = None                 # самое малое «видно» между обновлениями полоски
+        calibrating = AUTO_CALIB and len(self.calm_floors) < CALIB_MIN_CASTS
         while True:
             if self.stopped():
                 return
@@ -1444,11 +1471,22 @@ class Fisher:
                 self.watched = (pos, frame)          # спокойный кадр — таким место и запомним
             if det.ref and not det.flash and t >= CALIB_TIME:
                 calm.append((t, det.seen / det.ref))
+            if calibrating and t >= CALIB_NOW and len(calm) >= 30:
+                # прошлых забросов для автокалибровки ещё нет — порог по спокойной воде этого заброса
+                calibrating = False
+                floor = float(np.percentile([r for _, r in calm], 2))
+                det.ratio = float(np.clip(floor - CALIB_MARGIN, 0.35, CALIB_MAX))
+                self.log(tr("Автокалибровка по этому забросу: подсекаю, когда видно меньше %d%% поплавка.")
+                         % round(100 * det.ratio))
+            if not det.flash:
+                live_min = det.seen if live_min is None else min(live_min, det.seen)
             if now - last_live > 0.1:
                 last_live = now
-                self.emit("live", seen=det.seen, ref=det.ref, ratio=det.ratio, frame=frame,
-                          t=t, max_wait=max_wait, flash=det.flash, auto=AUTO_CALIB and
-                          len(self.calm_floors) >= CALIB_MIN_CASTS)
+                # на полоске — самое малое за это время: короткий нырок поплавка тоже будет виден
+                self.emit("live", seen=live_min if live_min is not None else det.seen, ref=det.ref,
+                          ratio=det.ratio, frame=frame, t=t, max_wait=max_wait, flash=det.flash,
+                          auto=AUTO_CALIB and (len(self.calm_floors) >= CALIB_MIN_CASTS or not calibrating))
+                live_min = None
             if self.record:
                 if why and auto_t is None:
                     auto_t, auto_why = t, why
