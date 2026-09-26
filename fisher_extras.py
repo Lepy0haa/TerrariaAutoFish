@@ -55,6 +55,115 @@ class ExtrasMixin:
         A.beep(330, 600)
         return True
 
+    def hearts(self, sct, cl):
+        """Сколько красного в сердечках здоровья (или None — сердечек не видно)."""
+        W, H = cl[2] - cl[0], cl[3] - cl[1]
+        region = {"left": cl[0] + int(W * 0.55), "top": cl[1], "width": W - int(W * 0.55), "height": int(H * 0.25)}
+        mask = A.heart_mask(A.grab(sct, region))
+        if self.hp_band is None:
+            self.hp_band = A.heart_rows(mask)
+            if self.hp_band is None:
+                return None
+        return int(mask[self.hp_band[0]:self.hp_band[1]].sum())
+
+    def check_death(self, sct, cl):
+        """Персонаж погиб: красного в сердечках не осталось совсем (а раньше было) две проверки подряд,
+        а хотбар при этом виден (на полноэкранной карте скрыто всё — это не смерть).
+        Тогда — остановить рыбалку совсем: без самопродолжения, даже если пережидали событие."""
+        if not A.DEATH_STOP:
+            return False
+        n = self.hearts(sct, cl)
+        if n is None:
+            return False
+        if n >= 150:
+            self.alive_hp, self.dead_checks = n, 0
+            return False
+        if self.alive_hp < 150 or n > self.alive_hp * 0.1:
+            return False
+        import hotbar
+        if hotbar.selected_slot(self.hotbar_frame(sct, cl)) is None:
+            return False                  # весь интерфейс скрыт (полноэкранная карта) — это не смерть
+        self.dead_checks += 1
+        if self.dead_checks < 2:
+            return False
+        self.dead_checks, self.alive_hp = 0, 0
+        during = self.event
+        self.event, self.resume_at, self.resume_on_focus = None, None, False
+        self.phase, self.watched = "idle", None
+        text = (tr("Персонаж погиб во время события «%s» — рыбалка остановлена совсем.") % tr(A.chat.EVENTS[during][0])
+                if during else tr("Персонаж погиб — рыбалка остановлена совсем."))
+        self.log(text, "bad")
+        if self.running.is_set():
+            self.stop_fishing(tr("Пауза: персонаж погиб."), notify=False)
+        self.state("pause", tr("Персонаж погиб"), tr("Рыбалка остановлена. Начните заново: %s") % self.key_name)
+        self.emit("notify", title=tr("Персонаж погиб"), text=text)
+        A.beep(220, 700)
+        return True
+
+    def check_chat(self, sct, cl, watching=False):
+        """Событие в чате («Восходит кровавая луна...», «Армия гоблинов прибыла!», «Босс … пробудился!»):
+        вытащить поплавок и переждать (сколько длится событие), потом продолжить самим. Конец
+        вторжения («…побеждена!») — продолжить сразу. True — встали на паузу."""
+        self.chat_last = time.perf_counter()
+        if not A.EVENTS_STOP or time.time() < self.chat_ignore_until or not self.ocr_ready():
+            return None
+        import chat
+        texts = chat.event_texts(A.grab(sct, chat.region(cl)), self.scale)
+        found = chat.classify(texts) if texts else None
+        if found is None:
+            return None
+        self.chat_ignore_until = time.time() + 30       # сообщение ещё повисит в чате — второй раз не считаем
+        kind, key = found
+        name, minutes = tr(chat.EVENTS[key][0]), chat.EVENTS[key][1]
+        if kind == "end":
+            if self.event == key:                       # пережидали именно его — можно продолжать
+                self.log(tr("В чате: «%s» — продолжаю рыбалку.") % texts[0], "good")
+                self.resume_at = time.time()
+            return None
+        if self.event is not None and self.running.is_set() is False and key == self.event:
+            return None
+        if watching and self.cast_point is not None:
+            A.click(*self.cast_point)                     # вытаскиваем поплавок
+        self.phase, self.watched = "idle", None
+        self.log(tr("В чате: «%s» (%s) — вытащил поплавок, пережду %d мин и продолжу сам.")
+                 % (texts[0], name, minutes), "bad")
+        self.resume_on_focus = False
+        if self.running.is_set():
+            self.stop_fishing(tr("Пауза: %s.") % name, notify=False)
+        self.event = key
+        self.resume_at = time.time() + minutes * 60
+        self.state("pause", name, tr("Продолжу сам в %s (или нажмите %s)")
+                   % (time.strftime("%H:%M", time.localtime(self.resume_at)), self.key_name))
+        self.emit("notify", title=name, text=tr("Рыбалка на паузе — продолжу через %d мин.") % minutes)
+        A.beep(330, 400)
+        return True
+
+    def watch_event(self, sct):
+        """Пережидаем событие (рыбалка на паузе): раз в пару секунд смотрим — не погиб ли персонаж
+        (тогда стоп совсем), не закончилось ли вторжение, не вышло ли время."""
+        if self.resume_at is None:
+            return
+        if time.perf_counter() - self.chat_last >= A.CHAT_EVERY:
+            hwnd = A.terraria_window()
+            if hwnd:                                    # смотрим, только когда видна сама игра
+                cl = A.client_rect(hwnd)
+                if self.check_death(sct, cl):
+                    return
+                self.check_chat(sct, cl)
+            else:
+                self.chat_last = time.perf_counter()
+        if self.resume_at is None or time.time() < self.resume_at:
+            return
+        name = tr(A.chat.EVENTS[self.event][0]) if self.event else ""
+        self.resume_at, self.event = None, None
+        if not self.has_points():
+            return
+        if A.terraria_window():
+            self.log(tr("Событие «%s» должно было закончиться — продолжаю.") % name, "good")
+            self.on_toggle()
+        else:
+            self.resume_on_focus = True                   # продолжим, как только игрок вернётся в игру
+
     def session_over(self):
         """Лимит по времени или подсечкам: вытащить поплавок, остановиться и (если выбрано)
         выключить компьютер. True — остановились."""

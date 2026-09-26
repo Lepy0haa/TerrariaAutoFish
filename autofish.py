@@ -30,6 +30,7 @@ import mss.tools
 import numpy as np
 from pynput import keyboard, mouse
 
+import chat  # noqa: E402,F401  (события в чате)
 import i18n
 from i18n import tr
 
@@ -107,6 +108,9 @@ GAME_NAMES = True     # названия улова брать из устано
 QUEST_FISH = None     # рыба для задания рыбака (id): поймали — пауза и уведомление
 AUTO_ZOOM = True      # при первом автопоиске поплавка узнать Zoom игры по размеру поплавка
 ZOOMS = (1.0, 1.25, 1.5, 1.75, 2.0)   # какие бывают (игра не мельче 100 %)
+EVENTS_STOP = True        # событие в чате (луны, затмение, вторжения, боссы) — вытащить поплавок и переждать
+DEATH_STOP = True         # персонаж погиб — остановить рыбалку совсем (без самопродолжения)
+CHAT_EVERY = 2.0          # как часто смотреть в чат, секунд
 FOLLOW_SHIFT = True   # вся картинка сдвинулась (персонажа сдвинуло) — перенести точки на столько же
 SHIFT_MIN = 3         #   ...если сдвиг хотя бы столько пикселей
 ROD_KEY_WAITS = (0.3, 0.5, 0.8)   # взять удочку: попыток нажать цифру слота и сколько ждать после каждой
@@ -431,6 +435,11 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.hp_band = None                # строки, где сердечки
         self.hp_low = 0                    # сколько проверок подряд здоровья меньше обычного
         self.hp_last = 0.0
+        self.chat_last = 0.0               # когда смотрели в чат
+        self.chat_ignore_until = 0.0       # это сообщение уже учли
+        self.resume_at = None              # когда продолжить самим (пережидаем событие)
+        self.event = None                  # какое событие пережидаем (ключ chat.EVENTS)
+        self.alive_hp, self.dead_checks = 0, 0   # сердечки живого персонажа / проверок «погиб» подряд
         self.bait_digits = None            # сколько цифр наживки видно на удочке (None — не смотрели)
         self.bait_count = None             # само число наживки (если прочиталось уверенно)
         self.bait_warned = False
@@ -563,6 +572,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             beep(1200, 80)
             return
         self.resume_on_focus = False
+        self.resume_at, self.event = None, None   # игрок сам решил — таймер больше не нужен
         if self.running.is_set():
             self.stop_fishing(tr("Пауза (по вашей команде)."), notify=False)
             return
@@ -715,6 +725,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         with (getattr(mss, "MSS", None) or mss.mss)() as sct:
             while not self.quit.is_set():
                 if not self.running.is_set():
+                    self.watch_event(sct)
                     self.watch_focus()
                     time.sleep(0.05)
                     continue
@@ -766,7 +777,9 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         # Лимит сессии (по времени или подсечкам) и здоровье персонажа
         if self.session_over():
             return
-        if self.check_health(sct, cl):
+        if self.check_death(sct, cl) or self.check_health(sct, cl):
+            return
+        if self.check_chat(sct, cl):
             return
         # 0. Удочка в руках? (если игрок переключал предметы — берём её обратно)
         if self.ensure_rod(sct, cl):
@@ -915,7 +928,10 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
                 return
             now = time.perf_counter()
             if now - self.hp_last >= HEALTH_EVERY:
-                if self.check_health(sct, cl, watching=True):
+                if self.check_death(sct, cl) or self.check_health(sct, cl, watching=True):
+                    return
+            if now - self.chat_last >= CHAT_EVERY:
+                if self.check_chat(sct, cl, watching=True):
                     return
             if now - start > max_wait:
                 self.learn(calm, now - start + 1.0)

@@ -1,5 +1,6 @@
-# Тесты на каждый коммит; на тег версии (v1.2.3) — ещё и сборка установщика и портативной версии
-# и релиз на GitHub с описанием из docs/releases/<тег>.md.
+# Тесты на каждый коммит; на метку версии (v1.2.3) — ещё и сборка установщика и портативной версии.
+# Собранные файлы прикладываются к запуску; релиз выкладывается от своего аккаунта:
+# python tools/publish_release.py v1.2.3 (описание — из docs/releases/<метка>.md).
 name: Build
 
 on:
@@ -12,7 +13,7 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -51,12 +52,13 @@ jobs:
         shell: cmd
         run: build.bat --no-pause
 
-      - name: Release
+      - name: Keep the files
+        # релиз выкладывается от своего аккаунта: python tools/publish_release.py <метка>
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          name: Terraria AutoFish ${{ env.VER }}
-          body_path: docs/releases/${{ github.ref_name }}.md
-          files: |
+          name: TerrariaAutoFish-${{ env.VER }}
+          path: |
             dist/TerrariaAutoFish-${{ env.VER }}-setup.exe
             dist/TerrariaAutoFish-${{ env.VER }}-portable.zip
+          retention-days: 30

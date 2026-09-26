@@ -44,7 +44,7 @@ DEFAULTS = {
     "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
     "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
     "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
-    "potion_remind": True,
+    "potion_remind": True, "events_stop": True, "death_stop": True,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -458,6 +458,8 @@ class App:
         af.BUFF_KEY = self.cfg["buff_key"]
         af.BUFF_METHOD = self.cfg["buff_method"]
         af.POTION_REMIND = bool(self.cfg["potion_remind"])
+        af.EVENTS_STOP = bool(self.cfg["events_stop"])
+        af.DEATH_STOP = bool(self.cfg["death_stop"])
         self.refresh_mode()
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
         af.MAX_WAIT = float(self.cfg["max_wait"])
@@ -1006,6 +1008,8 @@ class App:
         check(box, "health_guard", tr("Персонаж получает урон — вытащить поплавок и встать на паузу"))
         check(box, "bait_watch", tr("Наживка: мало — предупредить, кончилась — остановиться"))
         check(box, "inv_full_stop", tr("Улов перестал подбираться (инвентарь полон) — остановиться"))
+        check(box, "events_stop", tr("События в чате (кровавая луна, вторжения, боссы) — переждать и продолжить"))
+        check(box, "death_stop", tr("Персонаж погиб — остановить рыбалку совсем"))
         ttk.Separator(box).pack(fill="x", pady=6)
 
         head(tr("Когда закончить"))
@@ -1089,7 +1093,8 @@ class App:
             if self.absent:
                 lines.append(tr("  нет в хотбаре: %s") % ", ".join(names.get(n, n) for n in self.absent))
         watch = [t for k, t in (("health_guard", tr("урон")), ("bait_watch", tr("наживка")),
-                                ("inv_full_stop", tr("полный инвентарь"))) if c[k]]
+                                ("inv_full_stop", tr("полный инвентарь")),
+                                ("events_stop", tr("события")), ("death_stop", tr("смерть"))) if c.get(k)]
         if watch:
             lines.append(tr("Слежу: %s") % ", ".join(watch))
         stop = []

@@ -182,6 +182,7 @@ class TestReportAndWizard(unittest.TestCase):
                      "Последний улов: Обсидирыба"):
             self.assertIn(part, text)
         cfg.update(sonar_filter=False, buffs_on=False, health_guard=False, inv_full_stop=False, stop_after_min=0,
+                   events_stop=False, death_stop=False,
                    quest_fish=None)
         f.last_caught = None
         self.assertEqual(app.App.mode_lines(f), [af.tr("Улов: всё подряд")])

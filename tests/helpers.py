@@ -87,6 +87,7 @@ class FakeGame:
         self.drop_keys = 0                           # столько следующих нажатий игра пропустит
         self.pickup_life = 1.5                       # сколько секунд видна надпись о подборе
         self.shift = (0, 0)                          # мир сдвинулся на экране (персонажа сдвинуло)
+        self.chat_text = None                        # сообщение в чате: (текст, цвет BGR)
         self.need_cast = None                        # поплавок сядет на воду, только если заброс сюда
         self.cast_at = None
         self.selected = selected
@@ -121,6 +122,9 @@ class FakeGame:
         if self.catch_text and time.time() < self.pickup_until:  # подобрал улов — надпись над персонажем
             import textimg
             s = textimg.put_text(s, self.catch_text[0], self.catch_text[1], self.W // 2 - 60, self.H // 2 - 90)
+        if self.chat_text:                           # чат — внизу слева
+            import textimg
+            s = textimg.put_text(s, self.chat_text[0], self.chat_text[1], 4, self.H - 60, height=16)
         if self.night:
             s = s * 0.3 + np.array([30, 28, 26], np.float32)
         return s
