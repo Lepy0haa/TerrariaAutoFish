@@ -249,7 +249,9 @@ snapshots.
 | File | Contents |
 |---|---|
 | `app.py` | The program with a window, overlay and notifications |
-| `autofish.py` | Fishing logic: bobber search, bite detection, auto-calibration, recovery, potions; console version |
+| `autofish.py` | Fishing engine: settings, control, the main loop; console version |
+| `vision.py`, `fisher_gear.py`, `fisher_search.py`, `fisher_extras.py`, `fisher_catch.py` | Parts of the engine: image analysis and bite detection; rod and bobber marking; bobber search; health, limits, potions; catch (sonar, pickup text, inventory, Angler quest) |
+| `textmemory.py`, `updates.py`, `tray.py`, `wizard.py` | Name memory for catch recognition; update check; tray icon; first-run guide |
 | `buffs.py`, `pngread.py`, `assets/` | Buff recognition and the buff icons |
 | `catches.py`, `sonar.py`, `ocr.py`, `assets/fishing`, `tools/build_catches.py` | Choosing the catch by the Sonar Potion: catches of every biome (collected from the Terraria Wiki by the script), reading the name above the bobber, Windows text recognition |
 | `sprites.py`, `hotbar.py`, `assets/rods`, `assets/bobbers` | Recognition of fishing rods in the hotbar and bobbers on the water; the Wiki images |
