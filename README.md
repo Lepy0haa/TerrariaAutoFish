@@ -17,8 +17,13 @@ memory or files, so it does not depend on the game version.
 
 ## Features
 
-- **Watches the bobber itself** — you mark the bobber once, the program remembers what it looks
-  like and hooks when it sinks.
+- **Finds the bobber by itself** — after the first cast the program recognizes the bobber on the
+  water from the images of all bobbers on the Terraria Wiki (every fishing rod's bobber and all
+  Fishing Bobber accessories: regular, glowing, lava/krypton/xenon/argon/neon/helium moss). If it
+  can't, you simply point at the bobber once.
+- **Takes the fishing rod in hand** — remembers which hotbar slot the rod is in (all 11 rods from the
+  Wiki are recognized) and presses its number key if another item got selected.
+- **Watches the bobber** — remembers what it looks like and hooks when it sinks.
 - **Auto-calibration** — the hook threshold adapts to your water, weather, time of day and bobber.
 - **Pause and resume without losing points** — even after closing the program. If the bobber is
   still in the water after a pause, the program just keeps watching it.
@@ -53,8 +58,8 @@ Python is not needed. Or run it from the source code (see [Running from source](
 2. Hold the fishing rod, keep bait in the inventory. The bobber must **not** be cast.
 3. Point the cursor at the water (5+ tiles from the character) and press **HOME**.
    Or click **▶ Start (5 s)** in the program window and switch to the game within 5 seconds.
-4. The program casts and beeps: point the cursor at the **bobber** and press **HOME** again.
-   Being a bit off is fine — the program finds the bobber near the cursor by itself.
+4. The program casts and finds the bobber by itself. If it can't (it beeps and asks), point the
+   cursor at the **bobber** and press **HOME** again. Being a bit off is fine.
 5. That's it: the program waits for a bite, hooks and casts again. Don't touch the mouse.
 
 ## Controls
@@ -73,7 +78,8 @@ program just press **HOME** (if your character hasn't moved).
 - **Bobber** — a live picture of what the program is watching, and the remembered bobber.
 - **Bobber visible above water** — green bar: everything is calm; when the bar drops below the
   red line, it's a bite and the program hooks.
-- **Stats** — hooks, casts, hooks per hour, running time, failed casts in a row, potions.
+- **Stats** — hooks, casts, hooks per hour, running time, failed casts in a row, potions, the rod's
+  hotbar slot and the recognized bobber.
 - **Log** — all events. Green — good, red — pause/problems, yellow — your action is needed.
 
 The small window over the game shows the same things briefly. Drag it with the mouse; clicking it
@@ -99,6 +105,8 @@ does not take focus away from the game.
 
 | Setting | What it does |
 |---|---|
+| Select the fishing rod automatically | On start the program remembers the rod's hotbar slot (the selected one; if a different item is selected, it looks for a rod in the other slots). Before every cast, if another slot is selected, it presses the rod's number key. If the rod was moved to another slot and selected by you, the program just remembers the new slot |
+| Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 10, 30, then 60 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
 | Watch buffs and drink potions | Every 20 s the program looks for the Fishing and Crate buff icons (top left). If a buff is gone, it presses **Quick Buff** (B by default) and checks that the buff is back. If not — "out of potions?" notification |
@@ -113,13 +121,17 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 
 ## How it works
 
-1. **Marking.** You point at the bobber; the program finds the solid bright blob of the bobber near
-   the cursor and remembers its image and colors.
+1. **Finding the bobber the first time.** The program takes bright spots between the character
+   and the cast point and compares each with the images of all bobbers from the Terraria Wiki —
+   only the above-water part of the bobber, only its opaque pixels, by normalized correlation (so
+   brightness and tint don't matter). A match of 75%+ is accepted (a real bobber gives 85–95%,
+   empty water about 60%). Otherwise you point at the bobber; the program finds the solid bright
+   blob near the cursor. Either way it remembers the bobber's image, colors and type.
 2. **Finding the bobber after each cast.** The program looks for the remembered image near the
    mark and checks that there really is a bobber blob there. The image is updated after every cast,
    so sunset and sunrise don't matter. In the dark, color thresholds are adapted to the brightness.
    If the bobber is not there, the program waits a second and searches three times wider around the
-   original mark.
+   original mark, and finally looks for the Wiki image of this particular bobber type.
 3. **Detecting a bite.** The program counts how many pixels of the bobber's colors are visible
    above the water. When a fish bites, the bobber goes under water and fewer of them are visible.
    Frames with a lightning flash are skipped.
@@ -128,6 +140,9 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
    casts minus 20%, within 35–75%).
 5. **Buffs.** Buff icons are drawn semi-transparent over the background, so they are recognized by
    normalized correlation (it doesn't depend on brightness or tint), at any interface scale.
+6. **Hotbar.** The selected hotbar slot is the bright yellow one; from its size the program gets the
+   interface scale and the positions of all 10 slots, and compares the items in them with the Wiki
+   images of all fishing rods. Number keys 1–9, 0 select a slot, just like in the game.
 
 ## Troubleshooting
 
@@ -137,6 +152,8 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 | Misses bites | Raise the sensitivity (e.g. 65%) |
 | "Bobber not found" and pause | Usually out of bait. If the bobber lands far away — press **END** and choose new points |
 | After restarting, the program doesn't find the bobber | The character moved — press **END** and choose new points |
+| The program asks to point at the bobber | It didn't recognize the bobber (unusual lighting, another mod's bobber) — just point at it once, then everything is automatic |
+| The program switches to a wrong slot | Hold the rod when you start: the selected slot is remembered as the rod's. Or turn off "Select the fishing rod automatically" |
 | Potions are not drunk | Check the Quick Buff key; press "Check buffs now" with the buff active and the game visible |
 | Zoom in the game is not 100% | Set the same scale in the settings |
 | No Windows notifications | Check "Do not disturb" / Focus assist in Windows |
@@ -167,6 +184,7 @@ portable zip.
 | `app.py` | The program with a window, overlay and notifications |
 | `autofish.py` | Fishing logic: bobber search, bite detection, auto-calibration, recovery, potions; console version |
 | `buffs.py`, `pngread.py`, `assets/` | Buff recognition and the buff icons |
+| `sprites.py`, `hotbar.py`, `assets/rods`, `assets/bobbers` | Recognition of fishing rods in the hotbar and bobbers on the water; the Wiki images |
 | `i18n.py` | Translations (Russian / English) |
 | `installer.py`, `setup_core.py` | Installer and uninstaller |
 | `build.bat` | Builds the program, the installer and the portable zip |
@@ -174,5 +192,6 @@ portable zip.
 ## Important
 
 Use it in single player or on your own server. Macros are often prohibited on public servers and
-you can be banned for them. This project is not affiliated with Re-Logic. The buff icons in
-`assets/` are from the [Terraria Wiki](https://terraria.wiki.gg) and belong to Re-Logic.
+you can be banned for them. This project is not affiliated with Re-Logic. The buff, fishing rod and
+bobber images in `assets/` are from the [Terraria Wiki](https://terraria.wiki.gg) and belong to
+Re-Logic.

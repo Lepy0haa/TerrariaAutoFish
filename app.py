@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -37,6 +37,7 @@ DEFAULTS = {
     "sound": True, "hook_sound": False, "debug": False, "record": False, "win_pos": None,
     "lang": "auto", "auto_calib": True, "auto_recover": True, "auto_resume": True,
     "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b",
+    "auto_rod": True, "auto_mark": True,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -328,6 +329,8 @@ class App:
         af.AUTO_CALIB = bool(self.cfg["auto_calib"])
         af.AUTO_RECOVER = bool(self.cfg["auto_recover"])
         af.AUTO_RESUME = bool(self.cfg["auto_resume"])
+        af.AUTO_ROD = bool(self.cfg["auto_rod"])
+        af.AUTO_MARK = bool(self.cfg["auto_mark"])
         af.BUFFS_ON = bool(self.cfg["buffs_on"])
         af.BUFF_WANT = {"fishing": bool(self.cfg["buff_fishing"]), "crate": bool(self.cfg["buff_crate"])}
         af.BUFF_KEY = self.cfg["buff_key"]
@@ -439,6 +442,8 @@ class App:
         self.buff_lbl = ttk.Label(st, text="", style="Muted.TLabel")
         self.buff_lbl.pack(anchor="w")
         self.show_buffs(None)
+        self.gear_lbl = ttk.Label(st, text="", style="Muted.TLabel", wraplength=300, justify="left")
+        self.show_gear({"rod_slot": None, "rod": None, "bobber": None})
 
         vis = self.card(right, fill="x", pady=(6, 0))
         ttk.Label(vis, text=tr("Видно поплавка над водой (красная черта — порог)"),
@@ -572,6 +577,12 @@ class App:
                 anchor="w", padx=(pad, 0))
             return var
 
+        ttk.Label(box, text=tr("Удочка и поплавок"), style="Card.TLabel",
+                  font=(FONT, 9, "bold")).pack(anchor="w")
+        check("auto_rod", tr("Сам брать удочку в руки (если выбран другой слот хотбара)"))
+        check("auto_mark", tr("Сам находить поплавок после первого заброса (по картинкам с Terraria Wiki)"))
+        ttk.Separator(box).pack(fill="x", pady=8)
+
         ttk.Label(box, text=tr("Если что-то пошло не так"), style="Card.TLabel",
                   font=(FONT, 9, "bold")).pack(anchor="w")
         check("auto_recover", tr("Не сдаваться: после сбоев пробовать снова через 10, 30, 60 с"))
@@ -612,6 +623,19 @@ class App:
         names = {"fishing": tr("рыбалки"), "crate": tr("ящиков")}
         parts = ["%s %s" % (names[n], "✓" if ok else "✗") for n, ok in status.items()]
         return tr("Зелья: ") + " · ".join(parts)
+
+    def show_gear(self, d):
+        parts = []
+        if d.get("rod_slot") is not None:
+            parts.append(tr("Удочка: слот %d") % ((d["rod_slot"] + 1) % 10) +
+                         (" (%s)" % d["rod"] if d.get("rod") else ""))
+        if d.get("bobber"):
+            parts.append(tr("поплавок: %s") % d["bobber"])
+        self.gear_lbl.config(text=" · ".join(parts))
+        if parts:                          # пустую строку не показываем — окно не растёт зря
+            self.gear_lbl.pack(anchor="w")
+        else:
+            self.gear_lbl.pack_forget()
 
     def show_buffs(self, status):
         if not self.cfg["buffs_on"]:
@@ -672,6 +696,7 @@ class App:
         if self.fisher.bobber is not None:
             self.on_event("bobber", {"img": self.fisher.bobber})
         self.on_event("points", {"saved": self.fisher.has_points()})
+        self.fisher.gear_changed()
         running = self.fisher.running.is_set()
         self.set_state(self.state, self.state_title(self.state), "" if running else self.fisher.idle_hint())
         if self.overlay is not None:
@@ -795,6 +820,8 @@ class App:
             self.add_log(d["text"], d.get("kind", "info"))
         elif kind == "buffs":
             self.show_buffs(d["status"])
+        elif kind == "gear":
+            self.show_gear(d)
         elif kind == "buff_test":
             self.buff_test_lbl.config(text=d["text"])
         elif kind == "calib":
@@ -910,6 +937,7 @@ class App:
         self.q.put(("log", {"text": tr("Поклёвка (%s)! Подсекаю. Подсечек: %d (ждали %.1f с)")
                                     % (tr("видно 31% поплавка"), 12, 6.2), "kind": "good"}))
         self.q.put(("calib", {"ratio": 0.49, "casts": 6, "auto": True}))
+        self.q.put(("gear", {"rod_slot": 4, "rod": "Golden Fishing Rod", "bobber": "Glowing Fishing Bobber"}))
         self.q.put(("live", {"seen": 88, "ref": 110, "ratio": 0.49, "frame": img, "t": 7.4,
                              "max_wait": 45, "flash": False, "auto": True}))
 
@@ -973,8 +1001,10 @@ def main():
     if args[:1] == ["--selfcheck"]:                   # проверка сборки: всё ли внутри .exe
         f = af.Fisher()
         with open(args[1], "w", encoding="utf-8") as out:
-            out.write("version=%s buffs=%s icons=%s portable=%s\n" % (
-                VERSION, f.buffs is not None, sorted(f.buffs.icons) if f.buffs else [], PORTABLE))
+            out.write("version=%s buffs=%s icons=%s rods=%d bobbers=%d portable=%s\n" % (
+                VERSION, f.buffs is not None, sorted(f.buffs.icons) if f.buffs else [],
+                len(f.rods.rods.sprites) if f.rods else 0,
+                len(f.bobber_sprites.sprites) if f.bobber_sprites else 0, PORTABLE))
         return
     if args[:1] == ["--make-icon"]:
         write_ico(args[1])

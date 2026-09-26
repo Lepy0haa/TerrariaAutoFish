@@ -241,4 +241,29 @@ EN = {
     "Удалить Terraria AutoFish с этого компьютера?": "Remove Terraria AutoFish from this computer?",
     "Удалить также настройки и сохранённые точки?": "Also remove the settings and saved points?",
     "Terraria AutoFish удалена.": "Terraria AutoFish has been removed.",
+    # удочка и поплавки с Вики
+    "В руках был другой предмет (слот %d) — взял удочку (слот %s).":
+        "Another item was selected (slot %d) — switched to the fishing rod (slot %s).",
+    "Нажал %s, чтобы взять удочку, но слот не сменился.": "Pressed %s to take the fishing rod, but the slot didn't change.",
+    "Не получается взять удочку клавишей — больше не переключаю. Возьмите удочку в руки сами.":
+        "Can't switch to the fishing rod with a key — not trying anymore. Please select the rod yourself.",
+    "Не получается взять удочку. Возьмите её в руки сами.": "Can't switch to the fishing rod. Please select it yourself.",
+    "Поплавок нашёлся сам: %s (совпадение %.2f), %s. Дальше — автоматически.":
+        "Found the bobber by myself: %s (match %.2f), %s. Automatic from now on.",
+    "Похожее на поплавок: %s, совпадение %.2f — мало.": "Something like a bobber: %s, match %.2f — too low.",
+    "Сам брать удочку в руки (если выбран другой слот хотбара)":
+        "Select the fishing rod automatically (if another hotbar slot is selected)",
+    "Сам находить поплавок после первого заброса (по картинкам с Terraria Wiki)":
+        "Find the bobber automatically after the first cast (using Terraria Wiki images)",
+    "Сам поплавок не нашёл — покажите его, пожалуйста.": "Couldn't find the bobber by myself — please show it to me.",
+    "Удочка": "Fishing rod",
+    "Удочка и поплавок": "Fishing rod and bobber",
+    "Удочка теперь в слоте %d.": "The fishing rod is now in slot %d.",
+    "Удочка: %s, слот %d.": "Fishing rod: %s, slot %d.",
+    "Удочку по картинке не узнал — считаю, что она в слоте %d (он был выбран).":
+        "Didn't recognize the fishing rod — assuming it's in slot %d (the selected one).",
+    "Узнал поплавок по картинке (%s, совпадение %.2f).": "Recognized the bobber by its image (%s, match %.2f).",
+    "Это %s.": "It's a %s.",
+    "поплавок: %s": "bobber: %s",
+    "Удочка: слот %d": "Rod: slot %d",
 }

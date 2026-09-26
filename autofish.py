@@ -75,6 +75,12 @@ BUFF_WANT = {"fishing": True, "crate": True}   # какие баффы держ�
 BUFF_KEY = "b"        # клавиша быстрого баффа в Terraria (по умолчанию B)
 BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
 BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
+AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
+AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
+SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
+ROD_SELECTED_MIN = 0.45   # в руках удочка, если выбранный слот похож на удочку хотя бы так
+ROD_OTHER_MIN = 0.5       # ...иначе ищем удочку в другом слоте: оценка не ниже этой
+ROD_MARGIN = 0.1          # ...и заметно лучше, чем у остальных слотов
 SOUND = True          # пищать при старте, отметке, паузе
 # ==================================================================
 
@@ -439,6 +445,7 @@ class Fisher:
       points   {saved}                        — сохранены ли точка заброса и поплавок
       calib    {ratio, casts, auto}           — порог подсечки (автокалибровка)
       buffs    {status}                       — какие баффы есть: {"fishing": True, ...}
+      gear     {rod_slot, rod, bobber}        — слот удочки, какая удочка и какой поплавок (названия или None)
       hook     {why, waited}                  — подсечка
       notify   {title, text}                  — важное: пауза не по вашей команде, ошибка
     """
@@ -475,6 +482,19 @@ class Fisher:
             self.buffs = None
         self.last_buff_check = 0.0
         self.buff_backoff = {}
+        try:                               # удочки и поплавки с Вики (для хотбара и поиска поплавка)
+            import hotbar
+            import sprites
+            self.rods = hotbar.RodFinder(os.path.join(ASSET_DIR, "rods"))
+            self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=0.55,
+                                                    names=sprites.BOBBER_NAMES)
+        except Exception:
+            self.rods = self.bobber_sprites = None
+        self.rod_slot = None               # в каком слоте хотбара удочка (0..9)
+        self.hotbar_u = 1.0                # масштаб интерфейса, при котором его запомнили
+        self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
+        self.rod_name = None               # какая это удочка (ключ картинки) или None — не узнали
+        self.bobber_kind = None            # какой поплавок (ключ картинки) или None — не узнали
         self.started = None                # когда начали рыбачить (для «подсечек в час»)
         self.n = 0
         self.listeners = []
@@ -540,7 +560,8 @@ class Fisher:
         try:
             os.makedirs(os.path.dirname(self.points_path), exist_ok=True)
             np.savez(self.points_path, cast_point=self.cast_point, mark=self.mark, mark0=self.mark0,
-                     bobber=self.bobber, bobber0=self.bobber0, scale=self.scale)
+                     bobber=self.bobber, bobber0=self.bobber0, scale=self.scale,
+                     bobber_kind=self.bobber_kind or "")
         except Exception:
             pass
 
@@ -554,7 +575,9 @@ class Fisher:
             self.mark0 = tuple(int(v) for v in d["mark0"])
             self.bobber = d["bobber"].astype(np.float32)
             self.bobber0 = d["bobber0"].astype(np.float32)
+            self.bobber_kind = str(d["bobber_kind"]) if "bobber_kind" in d.files and str(d["bobber_kind"]) else None
             self.phase = "unknown"
+            self.gear_changed()
             return True
         except Exception:
             return False
@@ -606,7 +629,7 @@ class Fisher:
             self.log(tr("Сначала переключитесь в окно Terraria."), "ask")
             self.state("idle", tr("Нужно окно Terraria"), tr("Переключитесь в игру и нажмите %s") % self.key_name)
             return
-        self.fails = self.recover_round = self.errors = 0
+        self.fails = self.recover_round = self.errors = self.rod_misses = 0
         if self.started is None:
             self.started = time.time()
         if self.has_points():
@@ -614,6 +637,8 @@ class Fisher:
         else:
             self.cast_point = get_cursor()
             self.mark = self.bobber = self.mark0 = self.bobber0 = None
+            self.rod_slot = self.rod_name = self.bobber_kind = None
+            self.gear_changed()
             self.phase, self.watched = "unknown", None
             self.calm_floors.clear()      # новое место — калибруемся заново
             self.log(tr("Старт. Точка заброса: %s.%s") % (self.cast_point, tr(" Подсекаете вы.") if self.record else ""),
@@ -628,6 +653,8 @@ class Fisher:
         self.resume_on_focus = False
         self.stop_fishing(tr("Пауза: выбираем новые точки."), notify=False)
         self.cast_point = self.mark = self.bobber = self.mark0 = self.bobber0 = None
+        self.rod_slot = self.rod_name = self.bobber_kind = None
+        self.gear_changed()
         self.calm_floors.clear()
         self.calib_changed()
         self.delete_points()
@@ -666,6 +693,8 @@ class Fisher:
     def forget_bobber(self):
         """Забыть поплавок — при следующем забросе программа попросит отметить его снова."""
         self.bobber = self.bobber0 = self.mark0 = None
+        self.bobber_kind = None
+        self.gear_changed()
         self.points_changed()
 
     def stopped(self):
@@ -756,16 +785,197 @@ class Fisher:
                 self.save_dbg("%03d_ne_poplavok.png" % self.n, frame, scale=6)
                 continue
             x, y = corner
-            self.mark = (area["left"] + x + tw // 2, area["top"] + y + th // 2)
-            self.bobber = frame[y:y + th, x:x + tw].copy()
-            self.mark0, self.bobber0 = self.mark, self.bobber.copy()
-            self.emit("bobber", img=self.bobber)
-            self.points_changed()
-            self.save_points()
-            self.n += 1
-            self.save_dbg("%03d_poplavok.png" % self.n, self.bobber, scale=8)
+            self.adopt_bobber(area, frame, x, y)
+            self.identify_bobber(frame)
             self.log(tr("Поплавок запомнен: %s. Дальше — автоматически.") % (self.mark,), "good")
             return self.mark
+
+    def identify_bobber(self, frame):
+        """Какой это поплавок (по картинкам с Вики) — чтобы потом находить его и по картинке."""
+        if self.bobber_sprites is None:
+            return
+        best = self.bobber_sprites.find(frame, self.sprite_scales())
+        if best is not None and best[0] >= SPRITE_MIN:
+            self.bobber_kind = best[5]
+            self.log(tr("Это %s.") % self.bobber_sprites.title(best[5]))
+        else:
+            self.bobber_kind = None
+        self.gear_changed()
+        self.save_points()
+
+    def adopt_bobber(self, area, frame, x, y):
+        """Запомнить поплавок, найденный в кадре frame (снят с экрана в area) в углу (x, y)."""
+        tw, th = self.tw, self.th
+        self.mark = (area["left"] + x + tw // 2, area["top"] + y + th // 2)
+        self.bobber = frame[y:y + th, x:x + tw].copy()
+        self.mark0, self.bobber0 = self.mark, self.bobber.copy()
+        self.emit("bobber", img=self.bobber)
+        self.points_changed()
+        self.save_points()
+        self.n += 1
+        self.save_dbg("%03d_poplavok.png" % self.n, self.bobber, scale=8)
+
+    # ---------- удочка и поплавки с Вики ----------
+    def gear_changed(self):
+        rods = sprite_names = None
+        if self.rods is not None:
+            rods = self.rods.rods
+        if self.bobber_sprites is not None:
+            sprite_names = self.bobber_sprites
+        self.emit("gear", rod_slot=self.rod_slot,
+                  rod=rods.title(self.rod_name) if rods and self.rod_name else None,
+                  bobber=sprite_names.title(self.bobber_kind) if sprite_names and self.bobber_kind else None)
+
+    def sprite_scales(self):
+        """Масштабы, в которых искать поплавок: около Zoom из настроек (игра не бывает мельче 100 %)."""
+        return sorted({max(1.0, round(self.scale, 2))} |
+                      {v for v in (1.0, 1.25, 1.5, 1.75, 2.0) if abs(v - self.scale) <= 0.3})
+
+    def hotbar_frame(self, sct, cl):
+        region = {"left": cl[0], "top": cl[1], "width": min(cl[2] - cl[0], 1000),
+                  "height": min(cl[3] - cl[1], 200)}
+        return grab(sct, region)
+
+    def ensure_rod(self, sct, cl):
+        """Удочка должна быть в руках. Первый раз запоминаем её слот (обычно — тот, что выбран
+        при старте: с ним игрок и рыбачит), потом, если выбран другой слот, жмём цифру слота удочки.
+        True — переключили предмет (значит, старый поплавок, если был, игра убрала)."""
+        if not AUTO_ROD or self.rods is None:
+            return False
+        import hotbar
+        frame = self.hotbar_frame(sct, cl)
+        if self.rod_slot is None:
+            r = self.rods.scores(frame)
+            if r is None:
+                return False                 # хотбара не видно (открыт инвентарь, карта…)
+            index, out = r
+            self.hotbar_u = hotbar.selected_slot(frame)[1]
+            self.rod_misses = 0
+            best = max(range(len(out)), key=lambda i: out[i][0])
+            others = [v for i, (v, _) in enumerate(out) if i != best]
+            if out[index][0] >= ROD_SELECTED_MIN:
+                self.rod_slot, self.rod_name = index, out[index][1]
+            elif (best != index and out[best][0] >= ROD_OTHER_MIN and
+                  out[best][0] - max(others, default=0) >= ROD_MARGIN):
+                self.rod_slot, self.rod_name = best, out[best][1]
+            else:
+                self.rod_slot, self.rod_name = index, None
+            if self.rod_name:
+                self.log(tr("Удочка: %s, слот %d.") % (self.rods.rods.title(self.rod_name), (self.rod_slot + 1) % 10))
+            else:
+                self.log(tr("Удочку по картинке не узнал — считаю, что она в слоте %d (он был выбран).")
+                         % ((self.rod_slot + 1) % 10))
+            self.gear_changed()
+        sel = hotbar.selected_slot(frame)
+        # хотбар другого размера — значит, это не он (открыт инвентарь и т. п.): ничего не жмём
+        if sel is None or sel[0] == self.rod_slot or abs(sel[1] - self.hotbar_u) > 0.1:
+            return False
+        if self.rod_misses >= 3:
+            return False                     # переключить не получается — больше не пытаемся
+        # игрок сам взял удочку из другого слота? тогда запоминаем новый слот и ничего не жмём
+        r = self.rods.scores(frame)
+        if r is not None and r[1][sel[0]][0] >= ROD_SELECTED_MIN:
+            self.rod_slot, self.rod_name = sel[0], r[1][sel[0]][1]
+            self.log(tr("Удочка теперь в слоте %d.") % ((self.rod_slot + 1) % 10))
+            self.gear_changed()
+            return False
+        key = str((self.rod_slot + 1) % 10)
+        press_key(key)
+        time.sleep(0.3)
+        sel2 = hotbar.selected_slot(self.hotbar_frame(sct, cl))
+        if sel2 is not None and sel2[0] == self.rod_slot:
+            self.rod_misses = 0
+            self.log(tr("В руках был другой предмет (слот %d) — взял удочку (слот %s).")
+                     % ((sel[0] + 1) % 10, key), "good")
+        else:
+            self.rod_misses += 1
+            self.log(tr("Нажал %s, чтобы взять удочку, но слот не сменился.") % key, "bad")
+            if self.rod_misses >= 3:
+                self.log(tr("Не получается взять удочку клавишей — больше не переключаю. "
+                            "Возьмите удочку в руки сами."), "bad")
+                self.emit("notify", title=tr("Удочка"), text=tr("Не получается взять удочку. Возьмите её в руки сами."))
+        return True
+
+    def sprite_candidates(self, frame, n=8):
+        """Места, где может быть поплавок: пятна ярких цветов, не похожих на небо и воду
+        (лучшие n, не ближе ширины поплавка друг к другу). Список (x, y) центров."""
+        tw, th = self.tw, self.th
+        if frame.shape[0] < th or frame.shape[1] < tw:
+            return []
+        k = min(1.0, light_factor(frame))
+        sky = np.median(frame[:3].reshape(-1, 3), 0)
+        water = np.median(frame[-3:].reshape(-1, 3), 0)
+        far = np.minimum(np.abs(frame - sky).max(2), np.abs(frame - water).max(2)) > BG_DIST * k
+        vivid = (frame.max(2) - frame.min(2)) > SAT_MIN * k
+        m = (far & vivid).astype(np.int32)
+        ii = np.pad(m.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+        sums = (ii[th:, tw:] - ii[:-th, tw:] - ii[th:, :-tw] + ii[:-th, :-tw]).astype(np.float64)
+        out = []
+        for _ in range(n):
+            y, x = np.unravel_index(int(sums.argmax()), sums.shape)
+            if sums[y, x] < max(3, self.min_bobber_px // 2):
+                break
+            out.append((int(x) + tw // 2, int(y) + th // 2))
+            sums[max(0, y - th):y + th, max(0, x - tw):x + tw] = -1
+        return out
+
+    def sprite_search(self, frame, only=None):
+        """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ) или None."""
+        if self.bobber_sprites is None:
+            return None
+        pad_x, pad_y = self.tw + int(8 * self.scale), self.th + int(8 * self.scale)
+        best = None
+        for cx, cy in self.sprite_candidates(frame):
+            x0, y0 = max(0, cx - pad_x), max(0, cy - pad_y)
+            patch = frame[y0:cy + pad_y, x0:cx + pad_x]
+            r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only)
+            if r and (best is None or r[0] > best[0]):
+                v, x, y, w, h, key, s = r
+                best = (v, x0 + x + w // 2, y0 + y + h // 2, key)
+        return best
+
+    def auto_mark(self, sct, cl, player):
+        """Первый заброс: найти поплавок самому по картинкам поплавков с Вики — между игроком
+        и точкой заброса (и чуть дальше). Возвращает центр или None (тогда попросим отметить)."""
+        if not AUTO_MARK or self.bobber_sprites is None:
+            return None
+        s = self.scale
+        cx, cy = self.cast_point
+        x0 = max(cl[0], min(player[0], cx) - int(120 * s))
+        x1 = min(cl[2], max(player[0], cx) + int(160 * s))
+        y0 = max(cl[1], min(player[1], cy) - int(160 * s))
+        y1 = min(cl[3], max(player[1], cy) + int(120 * s))
+        if x1 - x0 < 3 * self.tw or y1 - y0 < 3 * self.th:
+            return None
+        area = {"left": x0, "top": y0, "width": x1 - x0, "height": y1 - y0}
+        frame = grab(sct, area)
+        # сам игрок, удочка у него в руках и курсор (он над головой игрока) — не поплавок
+        for (px, py), hx, hy in ((player, int(28 * s), int(45 * s)), (self.park, int(25 * s), int(25 * s))):
+            px, py = px - x0, py - y0
+            frame[max(0, py - hy):max(0, py + hy), max(0, px - hx):max(0, px + hx)] = frame[0, 0]
+        best = self.sprite_search(frame)
+        if best is None or best[0] < SPRITE_MIN:
+            if best is not None and self.debug:
+                self.log(tr("Похожее на поплавок: %s, совпадение %.2f — мало.")
+                         % (self.bobber_sprites.title(best[3]), best[0]))
+            return None
+        v, bx, by, key = best
+        # уточняем место так же, как при отметке курсором
+        tw, th, snap = self.tw, self.th, self.snap
+        center = (x0 + bx, y0 + by)
+        near = rect_around(center, tw // 2 + snap, th // 2 + snap)
+        if not inside(near, cl):
+            return None
+        near_frame = grab(sct, near)
+        corner = snap_adaptive(near_frame, tw, th, self.min_bobber_px)
+        if corner is None:
+            corner = (snap, snap)                  # пятно не выделилось — берём место по картинке
+        self.bobber_kind = key
+        self.adopt_bobber(near, near_frame, *corner)
+        self.gear_changed()
+        self.log(tr("Поплавок нашёлся сам: %s (совпадение %.2f), %s. Дальше — автоматически.")
+                 % (self.bobber_sprites.title(key), v, self.mark), "good")
+        return self.mark
 
     def search(self, sct, cl, center, half_x, half_y, wide=False, strict=False, update=True):
         """Ищет поплавок в зоне вокруг center. Возвращает (центр или None, непохожесть).
@@ -861,6 +1071,8 @@ class Fisher:
         self.log(tr("Поплавка нет на обычном месте — ищу шире вокруг отметки…"))
         home = self.mark0 or self.mark
         pos, err2 = self.search(sct, cl, home, self.zone_x * 3, self.zone_y * 3, wide=True)
+        if pos is None and self.bobber_kind and self.bobber_sprites is not None:
+            pos = self.sprite_locate(sct, cl, home)
         if pos is None:
             return None, min(err, err2)
         if max(abs(pos[0] - self.mark[0]), abs(pos[1] - self.mark[1])) > self.zone_x // 2:
@@ -869,6 +1081,27 @@ class Fisher:
         else:
             self.log(tr("Нашёл поплавок."))
         return pos, err2
+
+    def sprite_locate(self, sct, cl, home):
+        """Поплавок не узнали по образцу (сильно сменилось освещение) — ищем по картинке
+        этого вида поплавка с Вики вокруг отметки. Нашли — обновляем образец."""
+        zone = rect_around(home, self.zone_x * 3 + self.tw, self.zone_y * 3 + self.th)
+        zone["left"], zone["top"] = max(cl[0], zone["left"]), max(cl[1], zone["top"])
+        zone["width"] = min(cl[2], zone["left"] + zone["width"]) - zone["left"]
+        zone["height"] = min(cl[3], zone["top"] + zone["height"]) - zone["top"]
+        if zone["width"] < 3 * self.tw or zone["height"] < 3 * self.th:
+            return None
+        frame = grab(sct, zone)
+        best = self.sprite_search(frame, only=[self.bobber_kind])
+        if best is None or best[0] < SPRITE_MIN:
+            return None
+        tw, th = self.tw, self.th
+        x = int(np.clip(best[1] - tw // 2, 0, frame.shape[1] - tw))
+        y = int(np.clip(best[2] - th // 4 - th // 2, 0, frame.shape[0] - th))   # как при отметке
+        self.bobber = frame[y:y + th, x:x + tw].copy()
+        self.log(tr("Узнал поплавок по картинке (%s, совпадение %.2f).")
+                 % (self.bobber_sprites.title(self.bobber_kind), best[0]))
+        return zone["left"] + x + tw // 2, zone["top"] + y + th // 2
 
     # ---------- основной цикл ----------
     def worker(self):
@@ -956,7 +1189,13 @@ class Fisher:
         self.park = (player[0] + (10 if cx >= player[0] else -10),
                      max(cl[1] + 30, player[1] - int(130 * self.scale)))
 
-        # 0. Зелья: нет баффа — выпить (быстрым баффом)
+        # 0. Удочка в руках? (если игрок переключал предметы — берём её обратно)
+        if self.ensure_rod(sct, cl):
+            # сменили предмет — игра убирает поплавок из воды, следить не за чем
+            self.phase, self.watched = "idle", None
+            if not self.wait(0.2):
+                return
+        # Зелья: нет баффа — выпить (быстрым баффом)
         self.check_buffs(sct, cl)
 
         # Поплавок уже в воде (например, продолжаем после паузы)? Тогда не забрасываем —
@@ -991,7 +1230,17 @@ class Fisher:
             self.casts += 1
             self.stats()
             if self.bobber is None:
-                pos = self.ask_mark(sct, cl)
+                pos = None
+                if AUTO_MARK and self.bobber_sprites is not None:
+                    set_cursor(*self.park)
+                    self.state("search", tr("Ищу поплавок"), tr("Мышь не трогайте"))
+                    if not self.wait(SETTLE_TIME):
+                        return
+                    pos = self.auto_mark(sct, cl, player)
+                    if pos is None and not self.stopped():
+                        self.log(tr("Сам поплавок не нашёл — покажите его, пожалуйста."))
+                if pos is None:
+                    pos = self.ask_mark(sct, cl)
                 if pos is None:
                     if not self.stopped():
                         self.pause(tr("поплавок не отмечен"))
