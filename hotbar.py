@@ -37,10 +37,23 @@ def selected_slot(frame):
     width, x0, x1 = best
     if width < 20:
         return None
-    rows = np.nonzero(yellow[:, x0:x1].sum(1) >= width // 4)[0]
-    if not len(rows):
+    # строки заливки — самый длинный сплошной отрезок: жёлтое в фоне (огоньки гирлянды, факелы)
+    # над и под хотбаром отдельными строками не должно растягивать слот
+    # (иконка предмета внутри слота заливку прерывает — небольшие разрывы допускаем)
+    on = np.nonzero(yellow[:, x0:x1].sum(1) >= width // 4)[0]
+    if not len(on):
         return None
-    y0, y1 = int(rows.min()), int(rows.max()) + 1
+    run, y0, y1, start, last = 0, 0, 0, int(on[0]), int(on[0])
+    for y in list(on[1:]) + [None]:
+        if y is not None and y - last <= width // 3:
+            last = int(y)
+            continue
+        if last + 1 - start > run:
+            run, y0, y1 = last + 1 - start, start, last + 1
+        if y is not None:
+            start = last = int(y)
+    if run < width // 2:
+        return None
     u = width / float(INNER)
     x0, x1 = x0 - BORDER * u, x1 + BORDER * u
     y0, y1 = y0 - BORDER * u, y1 + BORDER * u

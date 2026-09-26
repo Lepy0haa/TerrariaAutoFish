@@ -56,6 +56,19 @@ class TestPotions(unittest.TestCase):
         self.assertEqual(f.potion_slots(img), {"fishing": 6, "sonar": 7, "crate": 8})
         self.assertEqual(f.rods.find(img)[0], 4)
 
+    def test_yellow_garland_behind_hotbar(self):
+        # снимок игрока: за хотбаром гирлянда с жёлтыми огоньками — раньше она «прилипала» к жёлтой
+        # заливке выбранного слота, раскладка слотов съезжала и не находились ни зелья, ни удочка
+        import hotbar
+        img = load_bgr("hotbar", "garland_crate_potion.png")
+        sel = hotbar.selected_slot(img)
+        self.assertEqual(sel[0], 5)
+        x0, y0, x1, y1 = sel[2]
+        self.assertLessEqual(abs((y1 - y0) - (x1 - x0)), 4)       # слот квадратный
+        f = self.fisher()
+        self.assertEqual(f.potion_slots(img), {"crate": 8})
+        self.assertEqual(f.rods.find(img)[0], 5)
+
     def test_potion_retry_is_short_and_manual_check_resets_it(self):
         af.BUFF_WANT = {"fishing": False, "crate": True, "sonar": False, "calm": False}
         f = self.fisher()
