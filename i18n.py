@@ -316,7 +316,7 @@ EN = {
     # улов по сонару
     " Улов ": " Catch ",
     " (хардмод)": " (hardmode)",
-    "Авто (по тому, что клюёт)": "Auto (by what bites)",
+    "Авто (по тому, что клюёт и ловится)": "Auto (by what bites and is caught)",
     "Всё": "All",
     "Ничего": "None",
     "Выбирать улов по зелью сонара": "Choose the catch using the Sonar Potion",
@@ -332,6 +332,11 @@ EN = {
     "Сонар: «%s» — не узнал предмет, подсекаю.": "Sonar: «%s» — unknown item, hooking.",
     "Сонар: клюёт «%s» — не отмечено, пропускаю.": "Sonar: «%s» is biting — not checked, skipping.",
     "биом: %s": "biome: %s",
+    "Нет баффа сонара — выбирать улов не по чему, подсекаю всё. Выпейте зелье сонара.":
+        "No Sonar buff — nothing to choose the catch by, hooking everything. Drink a Sonar Potion.",
+    "Нет баффа сонара — выбор улова не работает.": "No Sonar buff — choosing the catch doesn't work.",
+    "Поймал: %s.": "Caught: %s.",
+    "Сонар: похоже на «%s», но не уверен — подсекаю.": "Sonar: looks like «%s», but not sure — hooking.",
     # зелья из хотбара
     "%s — слот %d": "%s — slot %d",
     "Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет. Держите в инвентаре только нужные зелья.":

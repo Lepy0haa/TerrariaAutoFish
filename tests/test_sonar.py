@@ -62,6 +62,32 @@ class TestCatches(unittest.TestCase):
         self.assertTrue(c.wanted(boot, {"jungle": []}, "jungle"))            # список мусора не менялся
 
 
+class TestRealFont(unittest.TestCase):
+    """Настоящие надписи шрифтом Terraria (названия предметов над хотбаром на снимках из игры):
+    OCR читает их с ошибками, но из известного списка предмет выбирается уверенно — или не
+    выбирается вовсе (а не выбирается неправильный)."""
+
+    @unittest.skipUnless(ocr.available_languages(), "нет распознавания текста Windows")
+    def test_terraria_font(self):
+        import numpy as np
+        from helpers import hotbar as hb_img
+        c = catches.Catches(DATA)
+        extra = {99991: "Шипохват", 99992: "Удочка механика", 99993: "Мобильный телефон"}
+        for i, n in extra.items():
+            c.items[i] = {"ru": n, "en": n}
+            c.names.append((catches.normalize(n, True), i))
+        right = 0
+        for key, want in (("1", 99991), ("5", 99992), (None, 99993)):
+            img = (hb_img(key) if key else load_bgr("hotbar", "single_crate_potion.png"))[0:24, 100:460]
+            rd = sonar.TextReader(1.0)
+            rd.set_base(np.zeros_like(img) + np.array([240, 120, 60], np.float32))
+            frame = np.where((img.min(2) > 200)[:, :, None], img, rd.base)     # только буквы появились
+            got = c.identify_any(rd.read_all(frame))[0]
+            self.assertIn(got, (want, None), "выбран не тот предмет")
+            right += got == want
+        self.assertGreaterEqual(right, 2)
+
+
 class TestFlash(unittest.TestCase):
     def test_text_is_not_lightning(self):
         # надпись сонара в верхних строках окошка — не вспышка молнии (раньше поклёвка под
@@ -92,8 +118,8 @@ class TestReader(unittest.TestCase):
         c = catches.Catches(DATA)
         for text, color in (("Окунь", (255, 255, 255)), ("Ящик джунглей", (60, 200, 60)),
                             ("Голубой неон", (255, 150, 150)), ("Neon Tetra", (255, 150, 150))):
-            got = self.rd.read(textimg.put_text(self.base, text, color, 20, 30))
-            i, _ = c.identify(got)
+            got = self.rd.read_all(textimg.put_text(self.base, text, color, 20, 30))
+            i = c.identify_any(got)[0]
             self.assertIsNotNone(i, "%s -> %r" % (text, got))
 
     def test_no_text(self):
@@ -144,6 +170,32 @@ class TestSonarFlow(unittest.TestCase):
                                 for l in r.logs), r.logs)
             self.assertTrue(any("Окунь" in l and af.tr("Подсекаю")[:6] in l for l in r.logs), r.logs[-4:])
             self.assertGreaterEqual(self.game.clicks.count("заброс"), casts)
+        finally:
+            r.stop()
+
+    def test_biome_from_what_was_caught(self):
+        # сонара нет — биом угадывается по надписи о подборе над персонажем после подсечки
+        af.SONAR_FILTER = False
+        af.CATCH_WANT = {}
+        r = Run(self.game)
+        events = []
+        old = r.event
+        r.fisher.events = lambda k, d: (events.append((k, d)), old(k, d))
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            for name in ("Голубой неон", "Двойная треска"):
+                time.sleep(1.0)
+                self.game.catch_text = (name, (255, 150, 150))
+                n = r.fisher.hooks
+                self.game.empty = True
+                self.assertTrue(r.wait_for(lambda: r.fisher.hooks > n, 5))
+                self.game.empty = False
+                self.assertTrue(r.wait_for(lambda: any(af.tr("Поймал: %s.") % name == l for l in r.logs), 5),
+                                r.logs[-4:])
+                r.wait_for(r.waiting, 10)
+            self.assertEqual(r.fisher.current_biome(), "jungle")
+            self.assertTrue(any(k == "catch" and d.get("caught") for k, d in events))
         finally:
             r.stop()
 

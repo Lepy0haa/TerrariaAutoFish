@@ -79,6 +79,8 @@ class FakeGame:
         self.night = night
         self.decoy = False
         self.bite_text = None                        # надпись сонара при поклёвке: (текст, цвет BGR)
+        self.catch_text = None                       # что поймано: (текст, цвет) — надпись о подборе
+        self.pickup_until = 0.0                      # до какого времени видна надпись о подборе
         self.selected = selected
         self.clicks, self.keys, self.used = [], [], []
         self.cursor = (self.BX, self.OFF)
@@ -101,6 +103,9 @@ class FakeGame:
         if self.out and self.empty and self.bite_text:   # клюнуло — над поплавком название (сонар)
             import textimg
             s = textimg.put_text(s, self.bite_text[0], self.bite_text[1], self.BX - 60, self.BY - 55)
+        if self.catch_text and time.time() < self.pickup_until:  # подобрал улов — надпись над персонажем
+            import textimg
+            s = textimg.put_text(s, self.catch_text[0], self.catch_text[1], self.W // 2 - 60, self.H // 2 - 90)
         if self.night:
             s = s * 0.3 + np.array([30, 28, 26], np.float32)
         return s
@@ -113,6 +118,8 @@ class FakeGame:
             if self.out:
                 self.out = False
                 self.clicks.append("вытащил")
+                if self.catch_text:                  # вытащил улов — над персонажем его название
+                    self.pickup_until = time.time() + 1.5
             else:
                 self.out = True
                 self.cast_t = time.time()

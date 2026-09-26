@@ -94,6 +94,9 @@ SONAR_FILTER = False  # выбирать улов по зелью сонара: 
 CATCH_WANT = {}       # что ловить: {группа (биом, "crates", "rare", "junk"): множество id}; пусто — всё
 CATCH_BIOME = "auto"  # где рыбачим: ключ биома или "auto" — угадывать по тому, что клюёт
 SONAR_SKIP_PAUSE = 1.0    # пропустили ненужный улов — столько секунд не считать поклёвкой
+SKIP_MIN_RATIO = 0.6  # отпускать улов, только если название прочитано уверенно: похожесть не ниже
+SKIP_MIN_MARGIN = 0.15    #   ...и отрыв от второго по похожести названия не меньше (иначе — подсекаем)
+READ_PICKUP = True    # после подсечки читать над персонажем, что поймано (биом, учёт улова)
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
 AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
 SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
@@ -638,6 +641,9 @@ class Fisher:
             self.catches = None
         self.recent_catch = deque(maxlen=12)   # что клевало в последнее время (id) — чтобы угадать биом
         self.ocr_ok = None                 # доступно ли распознавание текста Windows
+        self.caught = {}                   # что поймано (по надписи о подборе): id -> сколько раз
+        self.sonar_buff_warned = 0.0       # когда последний раз предупреждали, что баффа сонара нет
+        self.last_sonar_check = 0.0
         self.rod_slot = None               # в каком слоте хотбара удочка (0..9) — запоминаем по удачному забросу
         self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
@@ -1660,6 +1666,7 @@ class Fisher:
                 return
         # Зелья: нет баффа — выпить (быстрым баффом)
         self.check_buffs(sct, cl)
+        self.check_sonar_buff(sct, cl)
         if self.stopped() or self.cast_point is None:
             return                            # пока пили зелья, поставили на паузу или сбросили точки
 
@@ -1863,8 +1870,11 @@ class Fisher:
                 self.emit("hook", why=why, waited=t)
                 self.save_dbg("%03d_poklevka.png" % self.n, np.concatenate([first, frame], axis=1), scale=6)
                 self.learn(calm, t)
+                pk = self.pickup_start(sct, cl, player)
                 self.reel(tr("Поклёвка (%s)! Подсекаю. Подсечек: %d (ждали %.1f с)")
                           % (why, self.hooks, t), "good")
+                if pk is not None and not self.stopped():
+                    self.pickup_read(sct, pk)                # что поймано — для учёта и биома
                 return
             time.sleep(POLL)
 
@@ -1878,11 +1888,7 @@ class Fisher:
             return CATCH_BIOME
         return self.catches.guess_biome(self.recent_catch) if self.catches else None
 
-    def sonar_reader(self, sct, cl, pos):
-        """Читатель надписи сонара для этого заброса — если выбор улова включён или идёт запись
-        (тогда надписи сохраняются для разбора). None — не нужен или OCR недоступен."""
-        if self.catches is None or not (SONAR_FILTER or self.record or self.debug):
-            return None
+    def ocr_ready(self):
         if self.ocr_ok is None:
             try:
                 import ocr
@@ -1891,7 +1897,12 @@ class Fisher:
                 self.ocr_ok = False
             if not self.ocr_ok and SONAR_FILTER:
                 self.log(tr("Распознавание текста Windows недоступно — выбор улова по сонару не работает."), "bad")
-        if not self.ocr_ok:
+        return self.ocr_ok and self.catches is not None
+
+    def sonar_reader(self, sct, cl, pos):
+        """Читатель надписи сонара для этого заброса — если выбор улова включён или идёт запись
+        (тогда надписи сохраняются для разбора). None — не нужен или OCR недоступен."""
+        if not (SONAR_FILTER or self.record or self.debug) or not self.ocr_ready():
             return None
         import sonar
         rd = sonar.SonarReader(self.scale)
@@ -1911,22 +1922,74 @@ class Fisher:
         tw, th = self.tw, self.th
         bx, by = pos[0] - rd.reg["left"], pos[1] - rd.reg["top"]
         frame = grab(sct, rd.reg)
-        text = rd.read(frame, (bx - tw // 2 - 6, by - th // 2 - 6, bx + tw // 2 + 6, by + th // 2 + 6))
+        texts = rd.read_all(frame, (bx - tw // 2 - 6, by - th // 2 - 6, bx + tw // 2 + 6, by + th // 2 + 6))
         self.n += 1
         if rd.last_img is not None:
             self.save_dbg("%03d_sonar.png" % self.n, frame, scale=2)
             self.save_dbg("%03d_sonar_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
-        if not text:
+        if not texts:
             return None
-        item_id, sim = self.catches.identify(text)
+        item_id, ratio, margin = self.catches.identify_any(texts)
         if item_id is None:
-            self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % text)
+            self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % texts[0])
             return None
         self.recent_catch.append(item_id)
         biome = self.current_biome()
         wanted = not CATCH_WANT or self.catches.wanted(item_id, CATCH_WANT, biome)
+        if not wanted and (ratio < SKIP_MIN_RATIO or margin < SKIP_MIN_MARGIN):
+            # отпускать можно только уверенно прочитанное — иначе можно упустить нужное
+            self.log(tr("Сонар: похоже на «%s», но не уверен — подсекаю.") % self.catch_name(item_id))
+            wanted = True
         self.emit("catch", id=item_id, name=self.catch_name(item_id), wanted=wanted, biome=biome)
         return item_id, wanted
+
+    def pickup_start(self, sct, cl, player):
+        """Перед подсечкой: снимок места над персонажем, где появится надпись о подборе."""
+        if not READ_PICKUP or not self.ocr_ready():
+            return None
+        import sonar
+        rd = sonar.PickupReader(self.scale)
+        rd.reg = rd.region(player, cl)
+        rd.set_base(grab(sct, rd.reg))
+        return rd
+
+    def pickup_read(self, sct, rd):
+        """После подсечки: что поймано (надпись о подборе над персонажем). Для учёта и угадывания
+        биома. id или None."""
+        frame = grab(sct, rd.reg)
+        texts = rd.read_all(frame)
+        self.n += 1
+        if rd.last_img is not None:
+            self.save_dbg("%03d_podbor.png" % self.n, frame, scale=2)
+            self.save_dbg("%03d_podbor_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
+        if not texts:
+            return None
+        item_id, ratio, margin = self.catches.identify_any(texts)
+        if item_id is None:
+            return None
+        self.recent_catch.append(item_id)
+        self.caught[item_id] = self.caught.get(item_id, 0) + 1
+        self.log(tr("Поймал: %s.") % self.catch_name(item_id), "good")
+        self.emit("catch", id=item_id, name=self.catch_name(item_id), wanted=True, biome=self.current_biome(),
+                  caught=True)
+        return item_id
+
+    def check_sonar_buff(self, sct, cl):
+        """Выбор улова включён, а баффа сонара нет — надписи не будет: предупредить (раз в 5 минут)."""
+        if not SONAR_FILTER or self.buffs is None or "sonar" not in self.buffs.icons:
+            return
+        now = time.time()
+        if now - self.last_sonar_check < 30:
+            return
+        self.last_sonar_check = now
+        region = {"left": cl[0], "top": cl[1], "width": min(cl[2] - cl[0], 900),
+                  "height": min(cl[3] - cl[1], 360)}
+        if self.buffs.find(grab(sct, region)).get("sonar", 0) >= BUFF_THRESHOLD():
+            return
+        if now - self.sonar_buff_warned > 300:
+            self.sonar_buff_warned = now
+            self.log(tr("Нет баффа сонара — выбирать улов не по чему, подсекаю всё. Выпейте зелье сонара."), "bad")
+            self.emit("notify", title=tr("Сонар"), text=tr("Нет баффа сонара — выбор улова не работает."))
 
     # ---------- режим записи ----------
     def on_click(self, x, y, button, pressed, injected=False):

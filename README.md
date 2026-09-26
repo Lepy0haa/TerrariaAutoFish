@@ -138,11 +138,14 @@ hold the potions.
 | Setting | What it does |
 |---|---|
 | Choose the catch using the Sonar Potion | When a fish bites, the Sonar Potion shows its name above the bobber. The program reads it and hooks only what is checked; otherwise it lets it go and waits for the next bite. If it can't read the name — it hooks (nothing valuable is lost) |
-| Fishing in | The biome whose list is used. **Auto** — guessed by what bites (e.g. Neon Tetra means the Jungle) |
+| Fishing in | The biome whose list is used. **Auto** — guessed by what bites (Sonar) and by what is caught: after every hook the program reads the pickup text above the character, so the biome is recognized even without the Sonar Potion (e.g. Neon Tetra means the Jungle). Caught items are also written to the log |
 | List | The catches of each biome (from the Terraria Wiki, with "hardmode" marks), plus Crates, Rare items and Junk that can be caught anywhere. "All" / "None" check or clear the whole list |
 
-The name is found by the Windows 10/11 built-in text recognition (Russian and English) and matched
-with all known catch names, tolerating recognition mistakes. With "Save debug pictures" or in record
+The name is found by the Windows 10/11 built-in text recognition (Russian and English). It reads
+the pixel font of Terraria with mistakes, so every text is read in several ways and matched with all
+known catch names; a name counts only if it is clearly better than the next one. A bite is let go
+only if the name was read confidently — otherwise it is hooked. Without the Sonar buff the program
+warns you (every 5 min). With "Save debug pictures" or in record
 mode every read is saved to `debug` / `record` (`…_sonar.png`) — send them if the program reads names
 wrong.
 

@@ -48,17 +48,40 @@ class Catches:
         """Группы-биомы (не «везде»)."""
         return [g for g in self.groups if g["key"] not in ("crates", "rare", "junk")]
 
-    def identify(self, text, min_ratio=0.72):
-        """По прочитанной надписи: (id, похожесть) или (None, похожесть лучшего)."""
+    def match(self, text):
+        """(id лучшего, его похожесть, отрыв от лучшего другого предмета) или (None, 0, 0)."""
         t = normalize(text)
         if len(t) < 3:
-            return None, 0.0
-        best, best_id = 0.0, None
+            return None, 0.0, 0.0
+        best = {}
         for name, i in self.names:
             r = difflib.SequenceMatcher(None, t, name).ratio()
-            if r > best:
-                best, best_id = r, i
-        return (best_id, best) if best >= min_ratio else (None, best)
+            if r > best.get(i, 0.0):
+                best[i] = r
+        order = sorted(best.items(), key=lambda kv: -kv[1])
+        top_id, top = order[0]
+        second = order[1][1] if len(order) > 1 else 0.0
+        return top_id, top, top - second
+
+    def identify(self, text, min_ratio=0.5, min_margin=0.12):
+        """По прочитанной надписи: (id, похожесть) или (None, похожесть лучшего). Шрифт Terraria
+        OCR читает с ошибками, но выбирать надо из известного списка: засчитываем, только если
+        лучшее название заметно лучше второго."""
+        item_id, ratio, margin = self.match(text)
+        if item_id is not None and ratio >= min_ratio and margin >= min_margin:
+            return item_id, ratio
+        return None, ratio
+
+    def identify_any(self, texts, min_ratio=0.5, min_margin=0.12):
+        """Лучшее из нескольких прочтений одной надписи: (id, похожесть, отрыв) или (None, ...)."""
+        best = (None, 0.0, 0.0)
+        for t in texts:
+            m = self.match(t)
+            if m[0] is not None and (m[1], m[2]) > (best[1], best[2]):
+                best = m
+        if best[0] is not None and best[1] >= min_ratio and best[2] >= min_margin:
+            return best
+        return (None,) + best[1:]
 
     def guess_biome(self, ids):
         """Где рыбачим — по тому, что клевало: биом, где встречается больше всего из ids

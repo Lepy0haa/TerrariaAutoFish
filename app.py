@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -738,7 +738,7 @@ class App:
             r.pack(fill="x", pady=(6, 0))
             ttk.Label(r, text=text, style="Card.TLabel", width=12).pack(side="left")
             return r
-        biomes = [("auto", tr("Авто (по тому, что клюёт)"))] + [(g["key"], g["ru"] if ru else g["en"])
+        biomes = [("auto", tr("Авто (по тому, что клюёт и ловится)"))] + [(g["key"], g["ru"] if ru else g["en"])
                                                                  for g in c.biomes()]
         self.biome_var = tk.StringVar(value=dict(biomes).get(self.cfg["catch_biome"], biomes[0][1]))
         cb = ttk.Combobox(row(tr("Где рыбачу")), textvariable=self.biome_var, values=[t for _, t in biomes],
