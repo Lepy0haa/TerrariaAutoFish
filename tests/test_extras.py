@@ -107,6 +107,27 @@ class TestPickupStacks(unittest.TestCase):
                 setattr(af, n, v)
 
 
+class TestHistory(unittest.TestCase):
+    def test_days_and_periods(self):
+        import datetime
+        import tempfile
+        import history
+        path = os.path.join(tempfile.mkdtemp(), "catch_history.json")
+        h = history.History(path)
+        now = datetime.date(2026, 9, 26)
+        for day, what in (("2026-09-26", [2315, 2315, None]), ("2026-09-24", [2312]), ("2026-08-01", [2315])):
+            for item in what:
+                h.add_hook(day)
+                h.add_catch(item, day)
+        h.add_skip("2026-09-26")
+        h2 = history.History(path)                       # после перезапуска программы — то же самое
+        t = h2.totals("today", now)
+        self.assertEqual((t["hooks"], t["unknown"], t["skipped"], t["items"]), (3, 1, 1, {2315: 2}))
+        self.assertEqual(h2.totals("week", now)["items"], {2315: 2, 2312: 1})
+        self.assertEqual(h2.totals("all", now)["items"], {2315: 3, 2312: 1})
+        self.assertEqual(h2.totals("all", now)["days"], 3)
+
+
 class TestReportAndWizard(unittest.TestCase):
     def test_catch_rows(self):
         import app
@@ -116,6 +137,7 @@ class TestReportAndWizard(unittest.TestCase):
 
         class Fake:
             catch_data = c
+            catch_totals = app.App.catch_totals
             fisher = type("F", (), {"caught": {bass: 2, neon: 5}, "caught_unknown": 1, "skipped": 3,
                                     "hooks": 8, "started": time.time() - 1800})()
         rows = app.App.catch_rows(Fake())

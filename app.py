@@ -345,6 +345,9 @@ class App:
         self.gear = {"rod_slot": None, "manual": False, "bobber": None}
         self.bait = None                  # сколько цифр наживки видно на удочке
         self.bait_count = None            # само число наживки (если прочиталось)
+        import history
+        self.history = history.History(None if selftest else os.path.join(CFG_DIR, "catch_history.json"))
+        self.report_period = "session"    # за какой период показывать отчёт об улове
         self.catch_info = None            # последнее, что прочитал сонар
         self.last_caught = None           # название последнего подобранного улова
         self.absent = []                  # каких нужных зелий нет в хотбаре
@@ -855,24 +858,33 @@ class App:
         self.show_group()
 
     # ---------- отчёт об улове ----------
-    def catch_rows(self):
+    def catch_totals(self, period="session"):
+        """Улов за период: за эту сессию — из движка, за день / неделю / всё время — из истории."""
+        if period == "session":
+            f = self.fisher
+            return {"hooks": f.hooks, "unknown": f.caught_unknown, "skipped": f.skipped,
+                    "items": dict(f.caught), "days": 0,
+                    "hours": (time.time() - f.started) / 3600.0 if f.started else 0.0}
+        return self.history.totals(period)
+
+    def catch_rows(self, period="session"):
         """[(название, сколько, где ловится)] пойманного (по надписям о подборе), по убыванию."""
-        f, c, ru = self.fisher, self.catch_data, i18n.LANG == "ru"
+        c, ru = self.catch_data, i18n.LANG == "ru"
         rows = []
-        for item_id, n in sorted(f.caught.items(), key=lambda kv: -kv[1]):
+        for item_id, n in sorted(self.catch_totals(period)["items"].items(), key=lambda kv: -kv[1]):
             it = c.items.get(item_id, {"ru": str(item_id), "en": str(item_id)})
             where = ", ".join((c.group[k]["ru"] if ru else c.group[k]["en"]) for k in c.where.get(item_id, []))
             rows.append((it["ru"] if ru else it["en"], n, where))
         return rows
 
-    def catch_summary(self):
-        f = self.fisher
-        known = sum(f.caught.values())
-        hours = (time.time() - f.started) / 3600.0 if f.started else 0.0
+    def catch_summary(self, period="session"):
+        t = self.catch_totals(period)
         text = tr("Подсечек: %d · узнано: %d · не узнано: %d · пропущено сонаром: %d") % (
-            f.hooks, known, f.caught_unknown, f.skipped)
-        if hours > 0.01:
-            text += tr(" · в час: %.0f") % (f.hooks / hours)
+            t["hooks"], sum(t["items"].values()), t["unknown"], t["skipped"])
+        if t.get("hours", 0) > 0.01:
+            text += tr(" · в час: %.0f") % (t["hooks"] / t["hours"])
+        if period != "session":
+            text += tr(" · дней с рыбалкой: %d") % t["days"]
         return text
 
     def show_catch_report(self):
@@ -882,6 +894,14 @@ class App:
         win.transient(self.root)
         frame = tk.Frame(win, bg=C["panel"], padx=10, pady=10)
         frame.pack(fill="both", expand=True, padx=8, pady=8)
+        top = tk.Frame(frame, bg=C["panel"])
+        top.pack(fill="x", pady=(0, 6))
+        ttk.Label(top, text=tr("За"), style="Card.TLabel").pack(side="left")
+        periods = [("session", tr("эту рыбалку")), ("today", tr("сегодня")), ("week", tr("7 дней")),
+                   ("all", tr("всё время"))]
+        period_var = tk.StringVar(value=dict(periods)[self.report_period])
+        pcb = ttk.Combobox(top, textvariable=period_var, values=[t for _, t in periods], state="readonly", width=14)
+        pcb.pack(side="left", padx=(6, 0))
         cols = (tr("Улов"), tr("Сколько"), tr("Где ловится"))
         tree = ttk.Treeview(frame, columns=cols, show="headings", height=12)
         for c, w in zip(cols, (180, 70, 220)):
@@ -899,13 +919,18 @@ class App:
             if not win.winfo_exists():
                 return
             tree.delete(*tree.get_children())
-            for row in self.catch_rows():
+            rows = self.catch_rows(self.report_period)
+            for row in rows:
                 tree.insert("", "end", values=row)
-            if not self.fisher.caught:
+            if not rows:
                 tree.insert("", "end", values=(tr("пока ничего не узнано"), "", ""))
-            summary.config(text=self.catch_summary() + "\n" + tr(
+            summary.config(text=self.catch_summary(self.report_period) + "\n" + tr(
                 "Улов узнаётся по надписи о подборе над персонажем после каждой подсечки."))
             win.after(2000, refresh)
+
+        def set_period(_e=None):
+            self.report_period = {t: k for k, t in periods}[period_var.get()]
+        pcb.bind("<<ComboboxSelected>>", set_period)
         refresh()
         self.catch_win = win
 
@@ -916,10 +941,10 @@ class App:
             with open(path, "w", encoding="utf-8-sig", newline="") as fh:
                 w = csv.writer(fh, delimiter=";")
                 w.writerow([tr("Улов"), tr("Сколько"), tr("Где ловится")])
-                for row in self.catch_rows():
+                for row in self.catch_rows(self.report_period):
                     w.writerow(row)
                 w.writerow([])
-                w.writerow([self.catch_summary()])
+                w.writerow([self.catch_summary(self.report_period)])
         except Exception as e:
             self.add_log(tr("Не удалось сохранить отчёт об улове: %r") % e, "bad")
             return
@@ -1367,6 +1392,10 @@ class App:
             self.show_gear(d)
         elif kind == "catch":
             self.catch_info = d
+            if d.get("caught"):
+                self.history.add_catch(d.get("id"))
+            elif not d.get("wanted", True):
+                self.history.add_skip()           # отпустили по сонару
             if d.get("caught") and d.get("name"):
                 self.last_caught = d["name"]
             self.show_gear(self.gear)
@@ -1417,6 +1446,7 @@ class App:
             if not d["saved"] and self.fisher.bobber is None:
                 self.tmpl_lbl.config(image="", text=tr("поплавок\nне отмечен"))
         elif kind == "hook":
+            self.history.add_hook()
             if self.cfg["toast_hooks"] and self.cfg["toasts"]:
                 toast(tr("Поклёвка!"), tr("Подсечка №%d (ждали %.0f с)") % (self.stats["hooks"], d["waited"]))
             if self.cfg["hook_sound"]:
@@ -1583,9 +1613,10 @@ class App:
                 for f in newest(LOG_DIR, 3, (".log",)):
                     z.write(f, "logs/" + os.path.basename(f))
                 z.writestr("settings/settings.json", json.dumps(self.cfg, ensure_ascii=False, indent=2))
-                f = os.path.join(CFG_DIR, "gear.json")
-                if os.path.exists(f):
-                    z.write(f, "settings/gear.json")
+                for name in ("gear.json", "catch_history.json"):
+                    f = os.path.join(CFG_DIR, name)
+                    if os.path.exists(f):
+                        z.write(f, "settings/" + name)
                 for sub, n in (("debug", 40), ("record", 40), ("hotbar", 20)):
                     for f in newest(os.path.join(af.HERE, sub), n):
                         z.write(f, sub + "/" + os.path.basename(f))
