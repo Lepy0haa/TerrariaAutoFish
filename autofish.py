@@ -86,6 +86,8 @@ BUFF_KEY = "b"        # клавиша быстрого баффа в Terraria (
 BUFF_METHOD = "hotbar"    # как пить: "hotbar" — нужное зелье из хотбара (цифра слота + клик),
                           #   "quick" — быстрым баффом (выпивает все зелья-баффы из инвентаря)
 POTION_MIN = 0.6      # зелье в слоте хотбара узнаём, если картинка с Вики совпала хотя бы так
+POTION_MIN_SINGLE = 0.7   # ...а в слоте без числа (зелье одно — игра число не пишет) — хотя бы так
+POTION_RETRY = 60.0   # зелья нет в хотбаре — снова смотреть через столько секунд
 BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
 BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
@@ -606,7 +608,7 @@ class Fisher:
             import hotbar
             import sprites
             self.rods = hotbar.RodFinder(os.path.join(ASSET_DIR, "rods"))
-            self.potions = hotbar.ItemFinder(os.path.join(ASSET_DIR, "potions"))
+            self.potions = hotbar.ItemFinder(os.path.join(ASSET_DIR, "potions"), need_count=False)
             self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=0.55,
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
@@ -1484,6 +1486,8 @@ class Fisher:
         if not force and now - self.last_buff_check < BUFF_CHECK_EVERY:
             return None
         self.last_buff_check = now
+        if force:
+            self.buff_backoff.clear()             # проверили вручную — пробовать выпить сразу
         region = {"left": cl[0], "top": cl[1], "width": min(cl[2] - cl[0], 900),
                   "height": min(cl[3] - cl[1], 360)}
         want = [n for n in self.buffs.icons if BUFF_WANT.get(n)]
@@ -1527,11 +1531,12 @@ class Fisher:
         if r is None:
             return {}
         found = {}
-        for j, (sc, _) in enumerate(r[1]):
+        for j, (sc, count) in enumerate(r[1]):
             if not sc:
                 continue
             key = max(sc, key=sc.get)
-            if sc[key] >= POTION_MIN and (key not in found or sc[key] > found[key][1]):
+            need = POTION_MIN if count else POTION_MIN_SINGLE
+            if sc[key] >= need and (key not in found or sc[key] > found[key][1]):
                 found[key] = (j, sc[key])
         return {k: v[0] for k, v in found.items()}
 
@@ -1552,7 +1557,7 @@ class Fisher:
         drank, left = [], []
         for n in missing:
             if n not in slots:
-                self.buff_backoff[n] = now + BUFF_BACKOFF
+                self.buff_backoff[n] = now + POTION_RETRY
                 self.log(tr("Нет «%s» в хотбаре — положите зелье в хотбар.") % tr(BUFF_NAMES[n]), "bad")
                 self.emit("notify", title=tr("Зелья"), text=tr("Нет «%s» в хотбаре.") % tr(BUFF_NAMES[n]))
                 continue

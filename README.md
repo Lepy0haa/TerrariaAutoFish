@@ -119,7 +119,7 @@ does not take focus away from the game.
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 3, 10, then 20 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
 | Watch buffs and drink potions | Every 20 s the program looks for the chosen buff icons (Fishing, Crate, Sonar, Calm; top left). If a buff is gone, it drinks the potion and checks that the buff is back. If not — "out of potions?" notification |
-| Drink: from the hotbar | The program finds exactly the needed potion in the hotbar (by the Wiki potion images; potions show a count), selects it with the slot's number key, drinks it with a click and takes the fishing rod again. Only between casts: switching items takes the bobber out of the water. If the potion isn't in the hotbar — a notification |
+| Drink: from the hotbar | The program finds exactly the needed potion in the hotbar (by the Wiki potion images — also a single potion, on which the game writes no number), selects it with the slot's number key, drinks it with a click and takes the fishing rod again. Only between casts: switching items takes the bobber out of the water. If the potion isn't in the hotbar — a notification |
 | Drink: with Quick Buff | Presses **Quick Buff** (B by default, the same key as in Terraria's controls) |
 | Check buffs now | Shows which buffs the program sees right now (the game must be visible) |
 

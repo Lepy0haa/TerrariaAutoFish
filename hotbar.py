@@ -165,9 +165,12 @@ class ItemFinder:
     Сравниваем только слоты с числом внизу (стопки, удочки с наживкой) — у них есть что узнавать,
     а мелкие иконки оружия и инструментов слишком похожи на что угодно."""
 
-    def __init__(self, folder):
+    def __init__(self, folder, need_count=True):
+        """need_count=False — сравнивать и слоты без числа (стопка из одного предмета числа
+        не показывает — например, одно зелье)."""
         import os
         from pngread import read_png
+        self.need_count = need_count
         self.rgba = {}
         for f in sorted(os.listdir(folder)):
             if f.endswith(".png"):
@@ -184,7 +187,7 @@ class ItemFinder:
         return out
 
     def cells(self, frame):
-        """(номер выбранного слота, [(слот, его размер, есть ли число), ...]) или None."""
+        """(номер выбранного слота, [(слот, его размер, есть ли число, сравнивать ли), ...]) или None."""
         sel = selected_slot(frame)
         if sel is None:
             return None
@@ -192,8 +195,9 @@ class ItemFinder:
         out = []
         for x0, y0, x1, y1, rel in slot_boxes(index, u, box):
             cell = frame[max(0, y0):y1, max(0, x0):x1].astype(np.float64)
-            ok = cell.shape[0] >= 16 and cell.shape[1] >= 16 and has_count(cell, rel * u)
-            out.append((cell, rel * u, ok))
+            big = cell.shape[0] >= 16 and cell.shape[1] >= 16
+            count = big and has_count(cell, rel * u)
+            out.append((cell, rel * u, count, big and (count or not self.need_count)))
         return index, out
 
     def all_scores(self, frame):
@@ -202,7 +206,7 @@ class ItemFinder:
         r = self.cells(frame)
         if r is None:
             return None
-        return r[0], [(self.cell_scores(c, size) if ok else None, ok) for c, size, ok in r[1]]
+        return r[0], [(self.cell_scores(c, size) if use else None, count) for c, size, count, use in r[1]]
 
     def find_item(self, frame, key, min_score=0.5):
         """В каком слоте предмет key: слот, где он больше всех похож именно на key (а не на
@@ -241,8 +245,8 @@ class RodFinder(ItemFinder):
         if r is None:
             return None
         out = []
-        for cell, size, ok in r[1]:
-            if not ok:
+        for cell, size, count, use in r[1]:
+            if not use:
                 out.append((0.0, None, False))
                 continue
             sc = self.cell_scores(cell, size)

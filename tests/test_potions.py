@@ -2,7 +2,7 @@
 рыбалки), берёт его цифрой слота, пьёт кликом и снова берёт удочку (слот 5)."""
 import unittest
 
-from helpers import FakeGame, Run, af, hotbar
+from helpers import FakeGame, Run, af, hotbar, load_bgr
 
 import hotbar as hb
 
@@ -47,6 +47,22 @@ class TestPotions(unittest.TestCase):
         f = self.fisher()
         for key in "1234567890":
             self.assertEqual(f.potion_slots(hotbar(key)), {"fishing": 8}, "выбран слот %s" % key)
+
+    def test_single_potion_without_number(self):
+        # снимок игрока: рыбалка в слоте 7 (с числом), сонар в 8 (с числом), ящичное зелье в 9 —
+        # одно, игра число не пишет; в руках телефон (слот 0), удочка в слоте 5
+        img = load_bgr("hotbar", "single_crate_potion.png")
+        f = self.fisher()
+        self.assertEqual(f.potion_slots(img), {"fishing": 6, "sonar": 7, "crate": 8})
+        self.assertEqual(f.rods.find(img)[0], 4)
+
+    def test_potion_retry_is_short_and_manual_check_resets_it(self):
+        af.BUFF_WANT = {"fishing": False, "crate": True, "sonar": False, "calm": False}
+        f = self.fisher()
+        f.check_buffs(af.mss.MSS(), self.cl())                  # ящичного зелья в хотбаре нет
+        self.assertLessEqual(f.buff_backoff["crate"] - af.time.time(), af.POTION_RETRY + 1)
+        f.check_buffs(af.mss.MSS(), self.cl(), force=True)      # «Проверить баффы сейчас»
+        self.assertEqual(f.buff_backoff, {})
 
     def test_drinks_from_hotbar_and_takes_rod_back(self):
         f = self.fisher()
