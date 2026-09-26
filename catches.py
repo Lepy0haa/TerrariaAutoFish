@@ -39,10 +39,32 @@ class Catches:
             for it in g["items"]:
                 self.items[it["id"]] = it
                 self.where.setdefault(it["id"], []).append(g["key"])
+        self.index_names()
+
+    def index_names(self):
         self.names = []                                   # (нормализованное название, id)
         for i, it in self.items.items():
-            for lang in ("ru", "en"):
-                self.names.append((normalize(it[lang], lang == "ru"), i))
+            for lang in ("ru", "en", "ru_wiki"):
+                if it.get(lang):
+                    self.names.append((normalize(it[lang], lang != "en"), i))
+
+    def use_game_names(self, names):
+        """Русские названия — как в самой игре (gamenames.load). Название с Вики остаётся запасным.
+        Возвращает, сколько названий заменено."""
+        import gamenames
+        changed = 0
+        for g in self.groups:
+            for it in g["items"]:
+                ru = gamenames.lookup(names, it["en"]) if names else None
+                if ru and ru != it["ru"]:
+                    it.setdefault("ru_wiki", it["ru"])
+                    it["ru"] = ru
+                    changed += 1
+        for g in self.groups:                             # self.items — последний из одинаковых id
+            for it in g["items"]:
+                self.items[it["id"]] = it
+        self.index_names()
+        return changed
 
     def biomes(self):
         """Группы-биомы (не «везде»)."""

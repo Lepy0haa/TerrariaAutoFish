@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.3.2"
+VERSION = "1.4.0"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -137,6 +137,31 @@ def icon_rgba(n):
     stick = (np.abs(x - 0.5) < 0.035) & (y > 0.12) & (y < 0.3)
     img[stick] = (15, 15, 20, 255)
     return img.reshape(n, k, n, k, 4).mean((1, 3)).astype(np.uint8)
+
+
+def write_version_info(path, description, filename):
+    """Сведения о файле для PyInstaller (--version-file): название, версия, автор. Без них .exe
+    выглядит для антивирусов подозрительнее."""
+    v = tuple(int(x) for x in (VERSION.split(".") + ["0", "0", "0"])[:4])
+    text = """VSVersionInfo(
+  ffi=FixedFileInfo(filevers=%(v)r, prodvers=%(v)r, mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1,
+                    subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'Lepy0haa'),
+      StringStruct('FileDescription', %(desc)r),
+      StringStruct('FileVersion', %(ver)r),
+      StringStruct('InternalName', 'TerrariaAutoFish'),
+      StringStruct('LegalCopyright', 'Lepy0haa, https://github.com/Lepy0haa/TerrariaAutoFish'),
+      StringStruct('OriginalFilename', %(file)r),
+      StringStruct('ProductName', 'Terraria AutoFish'),
+      StringStruct('ProductVersion', %(ver)r)])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+""" % {"v": v, "desc": description, "ver": VERSION, "file": filename}
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
 
 
 def write_ico(path, sizes=(16, 24, 32, 48, 64, 128, 256)):
@@ -734,6 +759,9 @@ class App:
         try:
             import catches
             self.catch_data = catches.Catches(os.path.join(af.ASSET_DIR, "fishing", "catches.json"))
+            if af.GAME_NAMES:
+                import gamenames
+                self.catch_data.use_game_names(gamenames.load())      # названия как в игре
         except Exception:
             self.catch_data = None
             ttk.Label(box, text=tr("Нет данных об улове."), style="Card.TLabel").pack(anchor="w")
@@ -1622,14 +1650,21 @@ def main():
             out.write("version=%s buffs=%s icons=%s rods=%d bobbers=%d portable=%s\n" % (
                 VERSION, f.buffs is not None, sorted(f.buffs.icons) if f.buffs else [],
                 len(f.rods.rods.sprites) if f.rods else 0,
-                len(f.bobber_sprites.sprites) if f.bobber_sprites else 0, PORTABLE))
+                len({s.name for s in f.bobber_sprites.sprites}) if f.bobber_sprites else 0, PORTABLE))
             import ocr
             out.write("potions=%d catches=%d ocr=%s\n" % (
                 len(f.potions.rgba) if f.potions else 0, len(f.catches.items) if f.catches else 0,
                 ",".join(ocr.available_languages()) or "нет"))
+            import gamenames
+            out.write("game_names=%d from_game=%d\n" % (
+                len(gamenames.load()), sum(1 for it in f.catches.items.values() if it.get("ru_wiki"))
+                if f.catches else 0))
         return
     if args[:1] == ["--make-icon"]:
         write_ico(args[1])
+        return
+    if args[:1] == ["--make-version"]:                 # сведения о файле для .exe (сборка)
+        write_version_info(args[1], args[2] if len(args) > 2 else APP, args[3] if len(args) > 3 else APP + ".exe")
         return
     selftest = args[1] if args[:1] == ["--selftest"] else None
     lang = args[2] if selftest and len(args) > 2 and args[2] in ("ru", "en") else None

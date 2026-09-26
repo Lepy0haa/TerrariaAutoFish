@@ -35,13 +35,15 @@ def resize(img, s):
 
 
 class Sprite:
-    def __init__(self, name, rgba, part=1.0):
-        """part — какую верхнюю долю спрайта сравнивать (у поплавка низ под водой)."""
+    def __init__(self, name, rgba, part=1.0, penalty=0.0):
+        """part — какую верхнюю долю спрайта сравнивать (у поплавка низ под водой).
+        penalty — сколько вычесть из совпадения (у верхушки поменьше похожего меньше примет)."""
         h = max(3, int(round(rgba.shape[0] * part)))
         rgba = rgba[:h]
         ys, xs = np.nonzero(rgba[:, :, 3] > 0)                    # обрезаем пустые поля
         rgba = rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
         self.name = name
+        self.penalty = penalty
         self.bgr = rgba[:, :, 2::-1].astype(np.float32)
         self.mask = (rgba[:, :, 3] > 127).astype(np.float32)
 
@@ -85,13 +87,21 @@ def image_fft(img):
             [np.fft.rfft2(img[:, :, c] ** 2) for c in range(3)])
 
 
+PART_PENALTY = 0.05   # за каждую следующую (меньшую) долю спрайта — совпадение хуже на столько
+
+
 class SpriteSet:
     def __init__(self, folder, part=1.0, names=None):
+        """part — доля спрайта сверху или несколько долей: поплавок в воде виден больше чем
+        наполовину, а в лаве (она непрозрачная) — только верхушка."""
+        parts = part if isinstance(part, (tuple, list)) else (part,)
         self.sprites = []
         for f in sorted(os.listdir(folder)):
             if f.endswith(".png"):
                 key = f[:-4]
-                self.sprites.append(Sprite(key, read_png(os.path.join(folder, f)), part))
+                rgba = read_png(os.path.join(folder, f))
+                for k, pt in enumerate(parts):
+                    self.sprites.append(Sprite(key, rgba, pt, PART_PENALTY * k))
         self.names = names or {}
 
     def title(self, key):
@@ -110,7 +120,7 @@ class SpriteSet:
                 if not sc.size:
                     continue
                 y, x = np.unravel_index(int(sc.argmax()), sc.shape)
-                v = float(sc[y, x])
+                v = float(sc[y, x]) - sp.penalty
                 if best is None or v > best[0]:
                     best = (v, int(x), int(y), t.shape[1], t.shape[0], sp.name, s)
         return best

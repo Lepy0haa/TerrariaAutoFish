@@ -3,11 +3,14 @@
 **English** | [Русский](README.ru.md)
 
 Automatic fishing for **Terraria** (1.4.4, 1.4.5 and newer, tModLoader). The program watches the
-bobber on the screen and hooks the fish the moment the bobber goes under water, then casts again.
-It can also keep your Fishing and Crate potion buffs up.
+bobber on the screen and hooks the fish the moment the bobber goes under water (or lava), then casts
+again. It takes the rod in hand, finds the bobber, drinks potions from the hotbar, can hook only the
+catch you want (Sonar Potion), counts what is caught and stops when something goes wrong.
 
-It works **only with screenshots, mouse clicks and key presses**: it does not read or modify game
-memory or files, so it does not depend on the game version.
+It works **with screenshots, mouse clicks and key presses**: it never reads or changes the game's
+memory and never changes its files, so it does not depend on the game version. The only thing it
+reads from the game is the item names from the translation tables built into `Terraria.exe` — so
+catch names match what the game writes.
 
 <p>
   <img src="docs/main-en.png" width="280" alt="Main window">
@@ -21,8 +24,9 @@ memory or files, so it does not depend on the game version.
 
 - **Finds the bobber by itself** — after the first cast the program recognizes the bobber on the
   water from the images of all bobbers on the Terraria Wiki (every fishing rod's bobber and all
-  Fishing Bobber accessories: regular, glowing, lava/krypton/xenon/argon/neon/helium moss). If it
-  can't, you simply point at the bobber once.
+  Fishing Bobber accessories: regular, glowing, lava/krypton/xenon/argon/neon/helium moss) — in
+  water and in lava, where only the top of the bobber sticks out. If it can't, you simply point at
+  the bobber once.
 - **Takes the fishing rod in hand** — finds the rod in the hotbar by itself (by the bait count
   written on it and by its shape; all 11 rods from the Wiki), remembers the slot of a successful
   cast between launches (or set it yourself) and presses its number key if another item got
@@ -35,18 +39,23 @@ memory or files, so it does not depend on the game version.
   when you return to the game from another window, it resumes by itself.
 - **Finds a lost bobber** — if the bobber lands off to the side, the program searches around the
   place you marked and remembers the new spot. Works at night and in caves too.
-- **Potions** — watches the Fishing, Crate, Sonar and Calm buffs and drinks potions (with Quick
-  Buff) when a buff ends. Tells you when you run out of potions.
+- **Potions** — watches the Fishing, Crate, Sonar and Calm buffs; when a buff ends, drinks exactly
+  that potion from the hotbar (or with Quick Buff). Tells you when you run out of potions.
 - **Choose what to catch in every biome** — with the Sonar Potion the game writes above the bobber
   what is biting; the program reads it (Windows text recognition) and hooks only what you checked for
   this biome (fish, crates, rare items, junk — 128 catches from the Terraria Wiki, in Russian and
-  English), skipping the rest.
+  English), skipping the rest. The moment the text appears is a bite too. Names are taken from the
+  installed game, exactly as it writes them.
+- **Angler quest** — choose today's quest fish: it is always hooked, and fishing pauses once it's
+  caught.
+- **Catch report** — what was caught this session, how many and where it lives; save as CSV.
 - **Unattended fishing** — if the character takes damage, reels in and pauses; warns when bait is
-  running low and stops as soon as it's gone; stops after the chosen time or number of hooks and
-  can shut the computer down.
+  running low and stops as soon as it's gone; pauses when the inventory is full; stops after the
+  chosen time or number of hooks and can shut the computer down.
 - **Ignores distractions** — waves, rain, fish shadows, pets, cursor sparkles, lightning flashes.
 - **Clear interface** — what's happening now and what you need to do, a live picture of the
-  bobber, stats, an event log, a small window over the game and Windows notifications.
+  bobber, stats, an event log, a small window over the game, Windows notifications, a tray icon
+  and a short first-run guide (**F1**). Checks for a new version once a day.
 - **Two languages** — English and Russian.
 
 ## Download
@@ -56,7 +65,11 @@ Get it from [Releases](../../releases):
 | File | What it is |
 |---|---|
 | `TerrariaAutoFish-<version>-setup.exe` | **Installer.** Installs for the current user (no admin rights), adds Desktop and Start menu shortcuts; remove it in Settings → Apps |
-| `TerrariaAutoFish-<version>-portable.zip` | **Portable version.** Unpack anywhere (e.g. a USB stick) and run `TerrariaAutoFish.exe`; settings are kept next to the program |
+| `TerrariaAutoFish-<version>-portable.zip` | **Portable version.** Unpack the `TerrariaAutoFish` folder anywhere (e.g. a USB stick) and run `TerrariaAutoFish.exe`; settings are kept next to the program |
+
+The program is a folder: `TerrariaAutoFish.exe` and the `_internal` folder next to it (keep them
+together). It's not a single self-extracting exe and isn't packed with UPX — antivirus programs trust
+such builds more, and it starts faster.
 
 Python is not needed. Or run it from the source code (see [Running from source](#running-from-source)).
 
@@ -111,6 +124,7 @@ does not take focus away from the game.
 | Small window, notifications, sounds | Ways to know what's happening |
 | Save debug pictures | Pictures of every search and hook in the `debug` folder — for troubleshooting |
 | Record mode | The program casts, you hook yourself; it records how the bobber behaved (`record` folder) |
+| Updates | Checks right away whether there is a newer version on GitHub (it also checks by itself once a day; only the public information about the latest release is read) |
 | Collect a report | Packs the logs, settings, latest debug pictures, hotbar snapshots and system info into `report_….zip` next to the program — send it when something goes wrong. The log is also written to the `logs` folder (kept for 14 days) |
 
 ### Automation tab
@@ -138,12 +152,19 @@ hold the potions.
 | Setting | What it does |
 |---|---|
 | Choose the catch using the Sonar Potion | When a fish bites, the Sonar Potion shows its name above the bobber. The program reads it and hooks only what is checked; otherwise it lets it go and waits for the next bite. If it can't read the name — it hooks (nothing valuable is lost) |
+| Angler quest | Today's quest fish. It is always hooked (even if unchecked in the lists); as soon as it's caught, fishing pauses and you get a notification |
+| Catch report | What was caught this session (by the pickup text): name, how many, where it lives; hooks, recognized / not recognized, let go by sonar, hooks per hour. **Save CSV** writes it to a file |
 | Fishing in | The biome whose list is used. **Auto** — guessed by what bites (Sonar) and by what is caught: after every hook the program reads the pickup text above the character, so the biome is recognized even without the Sonar Potion (e.g. Neon Tetra means the Jungle). Caught items are also written to the log |
 | List | The catches of each biome (from the Terraria Wiki, with "hardmode" marks), plus Crates, Rare items and Junk that can be caught anywhere. "All" / "None" check or clear the whole list |
 
 The name is found by the Windows 10/11 built-in text recognition (Russian and English). It reads
 the pixel font of Terraria with mistakes, so every text is read in several ways and matched with all
-known catch names; a name counts only if it is clearly better than the next one. A bite is let go
+known catch names; a name counts only if it is clearly better than the next one. Once a name has been
+read confidently, the program remembers how it looks and recognizes it next time even if the text
+recognition makes mistakes. The names themselves are read from the installed game (`Terraria.exe`
+has translation tables inside): Russian names on the Wiki often differ from the game's translation
+("Обсидиановая рыба" is "Обсидирыба" in the game), the Wiki name is kept as a spare. With "Choose
+the catch" on, the moment the text appears above the bobber also counts as a bite. A bite is let go
 only if the name was read confidently — otherwise it is hooked. Without the Sonar buff the program
 warns you (every 5 min). With "Save debug pictures" or in record
 mode every read is saved to `debug` / `record` (`…_sonar.png`) — send them if the program reads names
@@ -155,6 +176,7 @@ wrong.
 |---|---|
 | The character takes damage — reel in and pause | Twice a second the program looks at the health hearts (top right). If there are noticeably fewer of them (8% — about 2 hearts of 20) on two checks in a row, it reels in, pauses and sends a notification. Health regeneration is not a problem: the program compares with the highest level it has seen |
 | Watch the bait | The game writes the bait count on the fishing rod. The digits are too small to read them reliably, but the number of digits is visible: less than 10 — a notification; no number — out of bait: the program stops right away instead of retrying |
+| The catch stopped being picked up (inventory full) — stop | If the pickup text doesn't appear for 3 hooks in a row (the catch falls on the ground), fishing pauses and you get a notification |
 | Stop after, min / …or after this many hooks | 0 — don't stop. Time and hooks are counted as in the stats on the Fishing tab. When the limit is reached, the program reels in and stops |
 | Shut down the computer after such a stop | 60 s after the stop; the "Cancel shutdown" button (or `shutdown /a`) cancels it |
 
@@ -216,7 +238,8 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 | Potions are not drunk | Check the Quick Buff key; press "Check buffs now" with the buff active and the game visible |
 | Zoom in the game is not 100% | Set the same scale in the settings |
 | No Windows notifications | Check "Do not disturb" / Focus assist in Windows |
-| The antivirus complains | The .exe is built with PyInstaller and clicks the mouse for you — some antivirus programs react to that. You can run it from the source code instead |
+| Lava: the Sonar text isn't read | Above lava the game makes the picture shimmer (heat distortion) and letters double. Turn off *Settings → Video → Heat Distortion* in the game |
+| The antivirus complains | The program is built with PyInstaller and clicks the mouse for you — some antivirus programs react to that. It is built as a folder, without UPX and with version information to reduce false alarms. You can also run it from the source code |
 
 For a detailed analysis turn on **Save debug pictures** — pictures of every search (`poisk`) and
 hook (`poklevka`) appear in the `debug` folder next to the program.
@@ -233,16 +256,21 @@ python app.py
 A console version without a window: `start.bat` (also `start_debug.bat`, `start_record.bat`).
 Fine-tuning constants are at the top of `autofish.py`.
 
-`build.bat` builds everything into the `dist` folder: `TerrariaAutoFish.exe`, the installer and the
-portable zip.
+`build.bat` builds everything into the `dist` folder: the `TerrariaAutoFish` program folder, the
+installer and the portable zip (`build.bat --no-pause` doesn't wait for a key at the end).
+
+On GitHub every change runs all tests (`.github/workflows/build.yml`). Pushing a version tag
+(`v1.4.0`) also builds the installer and the portable version on GitHub's servers and publishes the
+release with the description from `docs/releases/<tag>.md`.
 
 ### Tests
 
-`run_tests.bat` (or `python -m unittest discover -s tests`) runs about 30 tests in a minute, all on
+`run_tests.bat` (or `python -m unittest discover -s tests`) runs 79 tests in about three minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
-taking the rod back, a bite, running out of bait, night) run in a "fake game" built from these
-snapshots.
+taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
+a full inventory) run in a "fake game" built from these snapshots. Another test checks that every
+message is translated to English.
 
 ### Files
 
@@ -253,11 +281,11 @@ snapshots.
 | `vision.py`, `fisher_gear.py`, `fisher_search.py`, `fisher_extras.py`, `fisher_catch.py` | Parts of the engine: image analysis and bite detection; rod and bobber marking; bobber search; health, limits, potions; catch (sonar, pickup text, inventory, Angler quest) |
 | `textmemory.py`, `updates.py`, `tray.py`, `wizard.py` | Name memory for catch recognition; update check; tray icon; first-run guide |
 | `buffs.py`, `pngread.py`, `assets/` | Buff recognition and the buff icons |
-| `catches.py`, `sonar.py`, `ocr.py`, `assets/fishing`, `tools/build_catches.py` | Choosing the catch by the Sonar Potion: catches of every biome (collected from the Terraria Wiki by the script), reading the name above the bobber, Windows text recognition |
+| `catches.py`, `sonar.py`, `ocr.py`, `gamenames.py`, `assets/fishing`, `tools/build_catches.py` | Choosing the catch by the Sonar Potion: catches of every biome (collected from the Terraria Wiki by the script), reading the name above the bobber, Windows text recognition, item names from the installed game |
 | `sprites.py`, `hotbar.py`, `assets/rods`, `assets/bobbers` | Recognition of fishing rods in the hotbar and bobbers on the water; the Wiki images |
 | `i18n.py` | Translations (Russian / English) |
 | `installer.py`, `setup_core.py` | Installer and uninstaller |
-| `build.bat` | Builds the program, the installer and the portable zip |
+| `build.bat`, `.github/workflows/build.yml`, `docs/releases` | Builds the program, the installer and the portable zip; automatic tests and builds on GitHub; release descriptions |
 
 ## Important
 

@@ -85,11 +85,17 @@ def installed_dir():
         return None
 
 
-def install(payload_exe, install_dir, version, desktop=True, start_menu=True, add_to_windows=True):
-    """Скопировать программу и (по желанию) создать ярлыки и запись в «Приложения»."""
+def install(payload, install_dir, version, desktop=True, start_menu=True, add_to_windows=True):
+    """Скопировать программу и (по желанию) создать ярлыки и запись в «Приложения».
+    payload — папка программы (TerrariaAutoFish.exe и _internal) или (старые сборки) один .exe."""
     os.makedirs(install_dir, exist_ok=True)
     target = os.path.join(install_dir, EXE_NAME)
-    shutil.copy2(payload_exe, target)          # PermissionError — если программа сейчас запущена
+    if os.path.isdir(payload):
+        # PermissionError — если программа сейчас запущена
+        shutil.rmtree(os.path.join(install_dir, "_internal"), ignore_errors=True)   # без старых файлов
+        shutil.copytree(payload, install_dir, dirs_exist_ok=True)
+    else:
+        shutil.copy2(payload, target)
     for old in ("portable.txt",):              # установленная версия хранит настройки в %APPDATA%
         try:
             os.remove(os.path.join(install_dir, old))

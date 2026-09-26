@@ -45,6 +45,15 @@ class CatchMixin:
             return A.CATCH_BIOME
         return self.catches.guess_biome(self.recent_catch) if self.catches else None
 
+    def heat_hint(self):
+        """Рыбачим в лаве, а надпись сонара не читается: над лавой игра «дрожит» картинку
+        (искажение от тепла) и буквы двоятся. Подсказать один раз, как это выключить."""
+        if self.heat_hinted or self.current_biome() != "lava":
+            return
+        self.heat_hinted = True
+        self.log(tr("Над лавой надписи дрожат и двоятся — их трудно прочитать. Выключите в игре: "
+                    "Настройки → Видео → «Искажение от тепла»."), "bad")
+
     def ocr_ready(self):
         if self.ocr_ok is None:
             try:
@@ -109,6 +118,7 @@ class CatchMixin:
         if item_id is None:
             if texts:
                 self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % texts[0])
+                self.heat_hint()
             return None
         self.recent_catch.append(item_id)
         biome = self.current_biome()

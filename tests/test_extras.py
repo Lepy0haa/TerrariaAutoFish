@@ -1,4 +1,5 @@
 """Обновления, полный инвентарь, отчёт об улове, мастер первого запуска."""
+import json
 import os
 import time
 import unittest
@@ -96,3 +97,36 @@ class TestReportAndWizard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGameNames(unittest.TestCase):
+    """Названия улова из файлов перевода игры (как они лежат внутри Terraria.exe)."""
+
+    def fake_exe(self):
+        en = {"IronPickaxe": "Iron Pickaxe", "Obsidifish": "Obsidifish", "FlarefinKoi": "Flarefin Koi"}
+        ru = {"IronPickaxe": "Железная кирка", "Obsidifish": "Обсидирыба", "FlarefinKoi": "Золотоперый карп"}
+        for d in (en, ru):
+            for k in range(1200):
+                d["Filler%d" % k] = "x%d" % k
+        blob = b"MZ\x00junk"
+        for d, extra in ((en, ',\n}'), (ru, '\n}')):
+            text = json.dumps({"ItemName": d}, ensure_ascii=False, indent=1)
+            text = text[:-3] + extra + "\n}"             # в игре бывает лишняя запятая в конце
+            blob += b"\x00\x01" + text.encode("utf-8") + b"\x00\xff\xfe"
+        return blob
+
+    def test_tables(self):
+        import gamenames
+        names = gamenames.english_to_russian(gamenames.read_tables(self.fake_exe()))
+        self.assertEqual(gamenames.lookup(names, "Obsidifish"), "Обсидирыба")
+        self.assertEqual(gamenames.lookup(names, "flarefin  koi"), "Золотоперый карп")
+
+    def test_catches_use_game_names(self):
+        import gamenames
+        c = catches.Catches(os.path.join(af.ASSET_DIR, "fishing", "catches.json"))
+        names = gamenames.english_to_russian(gamenames.read_tables(self.fake_exe()))
+        self.assertEqual(c.use_game_names(names), 2)
+        self.assertEqual(c.items[2315]["ru"], "Обсидирыба")
+        self.assertEqual(c.identify_any(["Обсидирыба"])[0], 2315)
+        self.assertEqual(c.identify_any(["Золотоперый карп"])[0], 2312)
+        self.assertEqual(c.identify_any(["Карп-огнепёрка"])[0], 2312)          # название с Вики — запасное

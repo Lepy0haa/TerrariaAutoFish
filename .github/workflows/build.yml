@@ -1,0 +1,52 @@
+# Тесты на каждый коммит; на тег версии (v1.2.3) — ещё и сборка установщика и портативной версии
+# и релиз на GitHub с описанием из docs/releases/<тег>.md.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: python -m pip install -r requirements.txt
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          grep -q "VERSION = \"$VER\"" app.py || { echo "app.py VERSION != $VER"; exit 1; }
+          grep -q "set VER=$VER" build.bat || { echo "build.bat VER != $VER"; exit 1; }
+          test -f "docs/releases/$GITHUB_REF_NAME.md" || { echo "no docs/releases/$GITHUB_REF_NAME.md"; exit 1; }
+          echo "VER=$VER" >> "$GITHUB_ENV"
+
+      - name: Build
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: cmd
+        run: build.bat --no-pause
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Terraria AutoFish ${{ env.VER }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          files: |
+            dist/TerrariaAutoFish-${{ env.VER }}-setup.exe
+            dist/TerrariaAutoFish-${{ env.VER }}-portable.zip

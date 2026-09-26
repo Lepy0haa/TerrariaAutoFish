@@ -100,6 +100,8 @@ LEARN_MIN_MARGIN = 0.2
 READ_PICKUP = True    # после подсечки читать над персонажем, что поймано (биом, учёт улова)
 SONAR_TEXT_BITE = True    # с выбором улова по сонару поклёвка — ещё и появление надписи над поплавком
 SONAR_TEXT_EVERY = 0.05   #   ...смотреть на место надписи раз в столько секунд
+BOBBER_PARTS = (0.55, 0.4)   # какая доля поплавка сверху видна: в воде / в лаве (она непрозрачная)
+GAME_NAMES = True     # названия улова брать из установленной игры (Terraria.exe), а не только с Вики
 QUEST_FISH = None     # рыба для задания рыбака (id): поймали — пауза и уведомление
 INV_FULL_STOP = True  # улов перестал подбираться (инвентарь полон) — остановиться
 INV_FULL_HOOKS = 3    #   ...если после стольких подсечек подряд нет надписи о подборе
@@ -365,7 +367,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             import sprites
             self.rods = hotbar.RodFinder(os.path.join(ASSET_DIR, "rods"))
             self.potions = hotbar.ItemFinder(os.path.join(ASSET_DIR, "potions"), need_count=False)
-            self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=0.55,
+            self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=BOBBER_PARTS,
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
             self.rods = self.bobber_sprites = self.potions = None
@@ -374,7 +376,14 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             self.catches = catches.Catches(os.path.join(ASSET_DIR, "fishing", "catches.json"))
         except Exception:
             self.catches = None
+        if self.catches is not None and GAME_NAMES:
+            try:                           # русские названия — как пишет сама игра, а не как на Вики
+                import gamenames
+                self.catches.use_game_names(gamenames.load())
+            except Exception:
+                pass
         self.recent_catch = deque(maxlen=12)   # что клевало в последнее время (id) — чтобы угадать биом
+        self.heat_hinted = False           # подсказали про «Искажение от тепла» (надписи над лавой)
         self.ocr_ok = None                 # доступно ли распознавание текста Windows
         try:                               # память надписей: как выглядят названия уже узнанного улова
             import textmemory

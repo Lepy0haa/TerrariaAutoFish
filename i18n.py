@@ -454,4 +454,12 @@ EN = {
     "Забыл этот слот: возьмите удочку в руки, запомню заново.":
         "Switched to slot %d, but there's no bobber — maybe the rod is in another slot now? "
         "Forgot this slot: select the rod yourself and I'll remember it again.",
+    "Над лавой надписи дрожат и двоятся — их трудно прочитать. Выключите в игре: "
+    "Настройки → Видео → «Искажение от тепла».":
+        "Above lava the text shimmers and doubles, so it's hard to read. Turn it off in the game: "
+        "Settings → Video → \"Heat Distortion\".",
+    # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
+    "Авто / Auto": "Авто / Auto",
+    "Русский": "Русский",
+    "Язык / Language": "Язык / Language",
 }

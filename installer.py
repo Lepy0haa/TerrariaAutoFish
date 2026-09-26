@@ -1,5 +1,6 @@
 """
-Установщик Terraria AutoFish. Внутри лежит TerrariaAutoFish.exe (добавляется при сборке).
+Установщик Terraria AutoFish. Внутри лежит папка программы (TerrariaAutoFish.exe и _internal —
+добавляется при сборке).
 Ставит программу для текущего пользователя (без прав администратора), создаёт ярлыки
 и запись в «Приложения» Windows, откуда программу можно удалить.
 """
@@ -14,7 +15,7 @@ from tkinter import filedialog, ttk
 import setup_core as sc
 from i18n import system_lang
 
-VERSION = "1.3.2"
+VERSION = "1.4.0"
 LANG = system_lang()
 TEXT = {
     "title": ("Установка Terraria AutoFish %s", "Terraria AutoFish %s Setup"),
@@ -47,8 +48,10 @@ def t(key):
 
 
 def payload():
+    """Папка программы внутри установщика (или один .exe — у старых сборок)."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, "payload", sc.EXE_NAME)
+    folder = os.path.join(base, "payload")
+    return folder if os.path.exists(os.path.join(folder, sc.EXE_NAME)) else os.path.join(folder, sc.EXE_NAME)
 
 
 BG, PANEL, TEXT_C, MUTED, GREEN, RED = "#14161b", "#1c2028", "#e8eaed", "#8f99a6", "#3ecf8e", "#ef5350"

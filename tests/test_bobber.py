@@ -31,6 +31,16 @@ class TestBobber(unittest.TestCase):
             self.assertGreaterEqual(best[0], af.SPRITE_MIN, z)
             self.assertEqual(best[3], "acc_glowing", z)
 
+    def test_lava_bobber_top_only(self):
+        # из игры: в лаве (она непрозрачная) видна только звёздочка поплавка — раньше его
+        # принимали за Lava Moss с совпадением 0.73 и просили отметить вручную
+        best = self.f.sprite_search(load_bgr("bobber", "lava_avto_poisk.png", down=2))
+        self.assertIsNotNone(best)
+        self.assertGreaterEqual(best[0], af.SPRITE_MIN)
+        self.assertEqual(best[3], "acc_glowing")
+        self.assertLessEqual(abs(best[1] - 276), 4)
+        self.assertLessEqual(abs(best[2] - 175), 4)
+
     def test_empty_water(self):
         best = self.f.sprite_search(load_bgr("bobber", "027_poisk_net.png", down=4))
         self.assertTrue(best is None or best[0] < af.SPRITE_MIN)
