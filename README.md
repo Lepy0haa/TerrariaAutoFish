@@ -108,6 +108,7 @@ does not take focus away from the game.
 |---|---|
 | Select the fishing rod automatically | Before every cast, if another hotbar slot is selected, the program presses the number key of the rod's slot |
 | Fishing rod slot | **Auto:** the program remembers the slot from which a cast actually produced a bobber, and keeps it between launches (just hold the rod the first time). If after switching to that slot no bobber appears, the slot is forgotten and learned again. Or choose the slot number yourself |
+| Hotbar snapshot | In 3 s saves the in-game hotbar pixel for pixel to the `hotbar` folder next to the program (and how much each slot looks like a fishing rod) — send such snapshots to help tune fishing rod recognition |
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 10, 30, then 60 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |

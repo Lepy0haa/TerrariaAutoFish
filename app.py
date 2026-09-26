@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -585,12 +585,16 @@ class App:
         row = ttk.Frame(box, style="Card.TFrame")
         row.pack(fill="x", padx=(22, 0))
         ttk.Label(row, text=tr("Слот удочки"), style="Card.TLabel").pack(side="left")
-        slots = [tr("Авто (запомню сам)")] + [str(i) for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)]
+        slots = [tr("Авто (запомню)")] + [str(i) for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)]
         self.rodslot_var = tk.StringVar(value=slots[0] if self.cfg["rod_slot"] == "auto" else str(self.cfg["rod_slot"]))
-        cb = ttk.Combobox(row, textvariable=self.rodslot_var, values=slots, state="readonly", width=24)
+        cb = ttk.Combobox(row, textvariable=self.rodslot_var, values=slots, state="readonly", width=19)
         cb.pack(side="left", padx=(8, 0))
         cb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt(
             "rod_slot", "auto" if self.rodslot_var.get() == slots[0] else self.rodslot_var.get()))
+        # снимок хотбара — для настройки распознавания удочек; подпись появляется только после нажатия
+        ttk.Button(row, text=tr("Снимок хотбара"), command=self.snap_hotbar).pack(side="right")
+        self.hb_row = row
+        self.hb_lbl = ttk.Label(box, text="", style="Muted.TLabel", wraplength=390, justify="left")
         check("auto_mark", tr("Сам находить поплавок после первого заброса (по картинкам с Terraria Wiki)"))
         ttk.Separator(box).pack(fill="x", pady=8)
 
@@ -672,6 +676,54 @@ class App:
                 status = self.fisher.check_buffs(sct, af.client_rect(hwnd), force=True) or {}
             want = {n: ok for n, ok in status.items()}
             self.q.put(("buff_test", {"text": self.buff_text(want) if want else tr("Не выбрано ни одного зелья.")}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def show_hb(self, text):
+        self.hb_lbl.config(text=text)
+        self.hb_lbl.pack(anchor="w", padx=(22, 0), after=self.hb_row)
+
+    def snap_hotbar(self):
+        """Сохранить хотбар из игры как есть (пиксель в пиксель) — по таким снимкам настраивается
+        распознавание удочек. 3 секунды — чтобы переключиться в игру и окно программы не мешало."""
+        self.show_hb(tr("Переключитесь в игру — снимок через 3 с…"))
+
+        def work():
+            import mss
+            import hotbar
+            time.sleep(3)
+            hwnd = af.find_terraria()
+            if not hwnd:
+                self.q.put(("hb_test", {"text": tr("Окно Terraria не найдено — игра запущена?")}))
+                return
+            with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                frame = self.fisher.hotbar_frame(sct, af.client_rect(hwnd))
+            folder = os.path.join(af.HERE, "hotbar")
+            name = time.strftime("hotbar_%Y%m%d_%H%M%S")
+            try:
+                af.save_png(frame, os.path.join(folder, name + ".png"))
+            except Exception as e:
+                self.q.put(("hb_test", {"text": tr("Не удалось сохранить снимок: %r") % e}))
+                return
+            sel = hotbar.selected_slot(frame)
+            if sel is None:
+                text = tr("Сохранено: %s. Выбранный (жёлтый) слот не виден — закройте инвентарь "
+                          "и повторите.") % os.path.join("hotbar", name + ".png")
+            else:
+                text = tr("Сохранено: %s. Выбран слот %d.") % (os.path.join("hotbar", name + ".png"),
+                                                               (sel[0] + 1) % 10)
+                r = self.fisher.rods.scores(frame) if self.fisher.rods else None
+                if r:
+                    out = [v for v, _ in r[1]]
+                    best = max(range(10), key=lambda i: out[i])
+                    text += " " + tr("Больше всего на удочку похож слот %d (%.2f).") % ((best + 1) % 10, out[best])
+                    try:
+                        with open(os.path.join(folder, name + ".txt"), "w", encoding="utf-8") as fh:
+                            fh.write("selected=%d scale=%.2f\n" % ((sel[0] + 1) % 10, sel[1]))
+                            for i, (v, k) in enumerate(r[1]):
+                                fh.write("slot %d: %.3f %s\n" % ((i + 1) % 10, v, k))
+                    except Exception:
+                        pass
+            self.q.put(("hb_test", {"text": text}))
         threading.Thread(target=work, daemon=True).start()
 
     # ---------- действия ----------
@@ -836,6 +888,8 @@ class App:
             self.show_buffs(d["status"])
         elif kind == "gear":
             self.show_gear(d)
+        elif kind == "hb_test":
+            self.show_hb(d["text"])
         elif kind == "buff_test":
             self.buff_test_lbl.config(text=d["text"])
         elif kind == "calib":

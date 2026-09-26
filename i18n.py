@@ -267,12 +267,19 @@ EN = {
     "поплавок: %s": "bobber: %s",
     "Удочка: слот %d": "Rod: slot %d",
     " (задан)": " (set)",
+    "Снимок хотбара": "Hotbar snapshot",
+    "Переключитесь в игру — снимок через 3 с…": "Switch to the game — snapshot in 3 s…",
+    "Не удалось сохранить снимок: %r": "Couldn't save the snapshot: %r",
+    "Сохранено: %s. Выбранный (жёлтый) слот не виден — закройте инвентарь и повторите.":
+        "Saved: %s. The selected (yellow) slot isn't visible — close the inventory and try again.",
+    "Сохранено: %s. Выбран слот %d.": "Saved: %s. Selected slot: %d.",
+    "Больше всего на удочку похож слот %d (%.2f).": "Slot %d looks most like a fishing rod (%.2f).",
     "Если в руках не удочка — возьмите её, нажмите %s и начните заново (%s на воде). Слот удочки запомню "
     "сам или задайте его на вкладке «Автоматика».":
         "If you're not holding the fishing rod, select it, press %s and start again (%s on the water). "
         "I'll remember the rod slot, or you can set it on the Automation tab.",
     "Слот удочки": "Fishing rod slot",
-    "Авто (запомню сам)": "Auto (I'll remember it)",
+    "Авто (запомню)": "Auto (remember)",
     "Запомнил: удочка в слоте %d. Если в руках окажется другой предмет — возьму её сам.":
         "Remembered: the fishing rod is in slot %d. If another item gets selected, I'll switch back to it.",
     "Похоже, удочка в слоте %d (по картинке) — беру её.": "The fishing rod seems to be in slot %d (by its image) — taking it.",

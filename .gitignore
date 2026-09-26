@@ -15,3 +15,4 @@ record/
 # настройки портативного режима / portable-mode settings
 settings/
 *.npz
+hotbar/
