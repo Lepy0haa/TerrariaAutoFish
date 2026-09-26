@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 python -c "import mss, numpy, pynput" 2>nul || python -m pip install -r requirements.txt
-python autofish.py --record %*
+python src\autofish.py --debug %*
 pause

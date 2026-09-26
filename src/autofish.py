@@ -145,10 +145,14 @@ except Exception:
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
 # папка программы: рядом с .exe или со скриптом
-HERE = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+# Папки: SRC — исходники (src), ROOT — корень проекта. Собранная программа хранит журналы,
+# отладочные картинки и снимки рядом с собой; запущенная из исходников — в папке program проекта.
+SRC = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(SRC)
+HERE = (os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.join(ROOT, "program"))
 DEBUG_DIR = os.path.join(HERE, "debug")
 # картинки (иконки баффов): внутри .exe — во временной папке PyInstaller, иначе — рядом со скриптом
-ASSET_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "assets")
+ASSET_DIR = os.path.join(getattr(sys, "_MEIPASS", ROOT), "assets")
 RECORD_DIR = os.path.join(HERE, "record")
 
 

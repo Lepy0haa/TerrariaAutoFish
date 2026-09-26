@@ -11,7 +11,7 @@ import sys
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "src"))
 import hotbar  # noqa: E402
 from pngread import read_png  # noqa: E402
 

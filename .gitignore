@@ -15,6 +15,8 @@ record/
 # настройки портативного режима / portable-mode settings
 settings/
 *.npz
+!/assets/*.npz
+/program/
 /hotbar/
 /logs/
 /report_*.zip

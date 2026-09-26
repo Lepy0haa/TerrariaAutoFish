@@ -32,7 +32,7 @@ jobs:
         run: |
           $c = Get-WindowsCapability -Online | Where-Object Name -like 'Language.OCR*ru-RU*'
           if ($c -and $c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $c.Name | Out-Null }
-          python -c "import ocr; print('OCR:', ocr.available_languages())"
+          python -c "import sys; sys.path.insert(0, 'src'); import ocr; print('OCR:', ocr.available_languages())"
 
       - name: Tests
         run: python -m unittest discover -s tests -v
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           VER="${GITHUB_REF_NAME#v}"
-          grep -q "VERSION = \"$VER\"" app.py || { echo "app.py VERSION != $VER"; exit 1; }
+          grep -q "VERSION = \"$VER\"" src/app.py || { echo "src/app.py VERSION != $VER"; exit 1; }
           grep -q "set VER=$VER" build.bat || { echo "build.bat VER != $VER"; exit 1; }
           test -f "docs/releases/$GITHUB_REF_NAME.md" || { echo "no docs/releases/$GITHUB_REF_NAME.md"; exit 1; }
           echo "VER=$VER" >> "$GITHUB_ENV"

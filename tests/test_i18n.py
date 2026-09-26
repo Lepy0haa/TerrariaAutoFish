@@ -25,7 +25,7 @@ def tr_strings(path):
 class Translations(unittest.TestCase):
     def test_all_translated(self):
         missing = []
-        files = [p for p in glob.glob(os.path.join(ROOT, "*.py")) if os.path.basename(p) != "i18n.py"]
+        files = [p for p in glob.glob(os.path.join(ROOT, "src", "*.py")) if os.path.basename(p) != "i18n.py"]
         for path in sorted(files):
             for text, line in tr_strings(path):
                 if text not in i18n.EN:
@@ -33,7 +33,7 @@ class Translations(unittest.TestCase):
         self.assertEqual(missing, [], "нет перевода:\n" + "\n".join(missing))
 
     def test_no_duplicate_keys(self):
-        with open(os.path.join(ROOT, "i18n.py"), encoding="utf-8") as f:
+        with open(os.path.join(ROOT, "src", "i18n.py"), encoding="utf-8") as f:
             tree = ast.parse(f.read())
         table = next(n for n in ast.walk(tree) if isinstance(n, ast.Dict))
         keys = [k.value for k in table.keys if isinstance(k, ast.Constant)]
