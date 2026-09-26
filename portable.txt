@@ -1,0 +1,7 @@
+Этот файл включает портативный режим: настройки и сохранённые точки
+хранятся в папке settings рядом с программой. Удалите этот файл,
+чтобы хранить их в %APPDATA%\TerrariaAutoFish.
+
+This file enables portable mode: settings and saved points are kept
+in the settings folder next to the program. Delete this file to keep
+them in %APPDATA%\TerrariaAutoFish instead.

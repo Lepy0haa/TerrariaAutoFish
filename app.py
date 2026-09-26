@@ -25,18 +25,24 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-CFG_DIR = os.path.join(os.environ.get("APPDATA") or af.HERE, "TerrariaAutoFish")
+VERSION = "1.1.0"
+# Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
+PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
+CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
+           else os.path.join(os.environ.get("APPDATA") or af.HERE, "TerrariaAutoFish"))
 CFG_PATH = os.path.join(CFG_DIR, "settings.json")
 DEFAULTS = {
     "hotkey": "home", "reset_key": "end", "scale": 1.0, "sink_ratio": 0.55, "max_wait": 45,
     "overlay": True, "overlay_pos": None, "toasts": True, "toast_hooks": False,
     "sound": True, "hook_sound": False, "debug": False, "record": False, "win_pos": None,
-    "lang": "auto", "auto_calib": True,
+    "lang": "auto", "auto_calib": True, "auto_recover": True, "auto_resume": True,
+    "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b",
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
            "f6", "f7", "f8", "f9"]
 ZOOMS = ["100%", "125%", "150%", "175%", "200%"]
+BUFF_KEYS = list("bvngcxzqhjklmuyt") + list("1234567890")
 
 C = {
     "bg": "#14161b", "panel": "#1c2028", "panel2": "#242a35", "line": "#2e3544",
@@ -263,7 +269,7 @@ class App:
         self.fisher = None
 
         self.root = tk.Tk()
-        self.root.title(APP)
+        self.root.title("%s %s" % (APP, VERSION))
         self.root.configure(bg=C["bg"])
         self.root.resizable(True, True)
         self.icon = tk.PhotoImage(data=base64.b64encode(png_bytes(icon_rgba(64))))
@@ -275,7 +281,8 @@ class App:
 
         self.fisher = af.Fisher(debug=self.cfg["debug"], record=self.cfg["record"],
                                 events=lambda k, d: self.q.put((k, d)), toggle_key=self.cfg["hotkey"],
-                                reset_key=self.cfg["reset_key"])
+                                reset_key=self.cfg["reset_key"],
+                                points_path=None if selftest else os.path.join(CFG_DIR, "points.npz"))
         self.fisher.set_scale(self.cfg["scale"])
         self.overlay = None
         self.toggle_overlay()
@@ -290,7 +297,10 @@ class App:
             self.root.after(1200, self.demo)
             self.root.after(2600, lambda: self.snapshot(selftest, close=False))
             self.root.after(2800, lambda: self.nb.select(1))
-            self.root.after(3200, lambda: self.snapshot(selftest.replace(".png", "_settings.png"), overlay=False))
+            self.root.after(3200, lambda: self.snapshot(selftest.replace(".png", "_settings.png"),
+                                                        close=False, overlay=False))
+            self.root.after(3400, lambda: self.nb.select(2))
+            self.root.after(3800, lambda: self.snapshot(selftest.replace(".png", "_auto.png"), overlay=False))
 
     def place_window(self):
         """Открыть окно там, где его оставили, но не за краем экрана."""
@@ -316,6 +326,11 @@ class App:
     def apply_engine_cfg(self):
         i18n.set_lang(self.cfg["lang"])
         af.AUTO_CALIB = bool(self.cfg["auto_calib"])
+        af.AUTO_RECOVER = bool(self.cfg["auto_recover"])
+        af.AUTO_RESUME = bool(self.cfg["auto_resume"])
+        af.BUFFS_ON = bool(self.cfg["buffs_on"])
+        af.BUFF_WANT = {"fishing": bool(self.cfg["buff_fishing"]), "crate": bool(self.cfg["buff_crate"])}
+        af.BUFF_KEY = self.cfg["buff_key"]
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
         af.MAX_WAIT = float(self.cfg["max_wait"])
         af.SOUND = bool(self.cfg["sound"])
@@ -384,10 +399,13 @@ class App:
         nb.pack(fill="both", expand=True, padx=8, pady=8)
         main = ttk.Frame(nb, padding=(0, 6, 0, 0))
         sett = ttk.Frame(nb, padding=(0, 6, 0, 0))
+        auto = ttk.Frame(nb, padding=(0, 6, 0, 0))
         nb.add(main, text=tr(" Рыбалка "))
         nb.add(sett, text=tr(" Настройки "))
+        nb.add(auto, text=tr(" Автоматика "))
         self.build_main(main)
         self.build_settings(sett)
+        self.build_auto(auto)
 
     def build_main(self, p):
         top = ttk.Frame(p)
@@ -418,6 +436,9 @@ class App:
             self.stat_lbls[key] = lbl
         self.fails_lbl = ttk.Label(st, text="", style="Muted.TLabel")
         self.fails_lbl.pack(anchor="w")
+        self.buff_lbl = ttk.Label(st, text="", style="Muted.TLabel")
+        self.buff_lbl.pack(anchor="w")
+        self.show_buffs(None)
 
         vis = self.card(right, fill="x", pady=(6, 0))
         ttk.Label(vis, text=tr("Видно поплавка над водой (красная черта — порог)"),
@@ -540,6 +561,80 @@ class App:
             APP, tr("Так выглядят уведомления программы"))).grid(row=row, column=0, sticky="w", pady=(6, 0))
         row += 1
         box.columnconfigure(0, weight=1)
+
+    def build_auto(self, p):
+        box = self.card(p, fill="both", expand=True)
+
+        def check(key, text, cmd=None, pad=0):
+            var = tk.BooleanVar(value=bool(self.cfg[key]))
+            ttk.Checkbutton(box, text=text, variable=var,
+                            command=lambda: (self.set_auto_opt(key, var.get()), cmd and cmd())).pack(
+                anchor="w", padx=(pad, 0))
+            return var
+
+        ttk.Label(box, text=tr("Если что-то пошло не так"), style="Card.TLabel",
+                  font=(FONT, 9, "bold")).pack(anchor="w")
+        check("auto_recover", tr("Не сдаваться: после сбоев пробовать снова через 10, 30, 60 с"))
+        check("auto_resume", tr("Сам продолжать, когда я вернусь в игру из другого окна"))
+        ttk.Separator(box).pack(fill="x", pady=8)
+
+        ttk.Label(box, text=tr("Зелья"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
+        check("buffs_on", tr("Следить за баффами и пить зелья, когда бафф закончился"))
+        check("buff_fishing", tr("Зелье рыбалки (бафф «Рыбалка»)"), pad=22)
+        check("buff_crate", tr("Ящичное зелье (бафф «Ящики»)"), pad=22)
+        row = ttk.Frame(box, style="Card.TFrame")
+        row.pack(fill="x", pady=(6, 0))
+        ttk.Label(row, text=tr("Клавиша быстрого баффа (как в игре)"), style="Card.TLabel").pack(side="left")
+        self.buffkey_var = tk.StringVar(value=self.cfg["buff_key"].upper())
+        cb = ttk.Combobox(row, textvariable=self.buffkey_var, values=[k.upper() for k in BUFF_KEYS],
+                          state="readonly", width=5)
+        cb.pack(side="right")
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt("buff_key", self.buffkey_var.get().lower()))
+        ttk.Label(box, text=tr("Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет, "
+                               "и не тратит зелья, если бафф ещё идёт. Держите в инвентаре только нужные зелья."),
+                  style="Muted.TLabel", wraplength=390, justify="left").pack(anchor="w", pady=(6, 0))
+        row = ttk.Frame(box, style="Card.TFrame")
+        row.pack(fill="x", pady=(8, 0))
+        ttk.Button(row, text=tr("Проверить баффы сейчас"), command=self.test_buffs).pack(side="left")
+        self.buff_test_lbl = ttk.Label(box, text=tr("Игра должна быть видна на экране (окно программы не должно её закрывать)."),
+                                       style="Muted.TLabel", wraplength=390, justify="left")
+        self.buff_test_lbl.pack(anchor="w", pady=(4, 0))
+
+    def set_auto_opt(self, key, value):
+        self.cfg[key] = value
+        save_cfg(self.cfg)
+        self.apply_engine_cfg()
+        if key.startswith("buff"):
+            self.fisher.last_buff_check = 0          # проверить при ближайшем забросе
+            self.show_buffs(None)
+
+    def buff_text(self, status):
+        names = {"fishing": tr("рыбалки"), "crate": tr("ящиков")}
+        parts = ["%s %s" % (names[n], "✓" if ok else "✗") for n, ok in status.items()]
+        return tr("Зелья: ") + " · ".join(parts)
+
+    def show_buffs(self, status):
+        if not self.cfg["buffs_on"]:
+            self.buff_lbl.config(text=tr("Зелья: не слежу (вкладка «Автоматика»)"))
+        elif status is None:
+            self.buff_lbl.config(text=tr("Зелья: проверю при забросе"))
+        else:
+            self.buff_lbl.config(text=self.buff_text(status))
+
+    def test_buffs(self):
+        self.buff_test_lbl.config(text=tr("Проверяю…"))
+
+        def work():
+            import mss
+            hwnd = af.find_terraria()
+            if not hwnd:
+                self.q.put(("buff_test", {"text": tr("Окно Terraria не найдено — игра запущена?")}))
+                return
+            with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                status = self.fisher.check_buffs(sct, af.client_rect(hwnd), force=True) or {}
+            want = {n: ok for n, ok in status.items()}
+            self.q.put(("buff_test", {"text": self.buff_text(want) if want else tr("Не выбрано ни одного зелья.")}))
+        threading.Thread(target=work, daemon=True).start()
 
     # ---------- действия ----------
     def set_hotkey(self):
@@ -698,6 +793,10 @@ class App:
     def on_event(self, kind, d):
         if kind == "log":
             self.add_log(d["text"], d.get("kind", "info"))
+        elif kind == "buffs":
+            self.show_buffs(d["status"])
+        elif kind == "buff_test":
+            self.buff_test_lbl.config(text=d["text"])
         elif kind == "calib":
             self.calib = d
             self.show_calib()
@@ -846,8 +945,37 @@ class App:
         self.root.mainloop()
 
 
+def uninstall():
+    """Удаление (Windows вызывает «TerrariaAutoFish.exe --uninstall» из «Приложений»)."""
+    import setup_core as sc
+    from tkinter import messagebox
+    i18n.set_lang(load_cfg().get("lang", "auto"))
+    root = tk.Tk()
+    root.withdraw()
+    if not messagebox.askyesno(APP, tr("Удалить Terraria AutoFish с этого компьютера?")):
+        return
+    with_settings = messagebox.askyesno(APP, tr("Удалить также настройки и сохранённые точки?"))
+    home = sc.installed_dir()
+    same = home and os.path.normcase(os.path.abspath(home)) == os.path.normcase(os.path.abspath(af.HERE))
+    if same:
+        sc.uninstall(af.HERE, remove_settings=with_settings)
+    else:                            # запущено не из папки установки — папку не трогаем
+        sc.remove_shortcuts()
+        sc.unregister()
+    messagebox.showinfo(APP, tr("Terraria AutoFish удалена."))
+
+
 def main():
     args = sys.argv[1:]
+    if args[:1] == ["--uninstall"]:
+        uninstall()
+        return
+    if args[:1] == ["--selfcheck"]:                   # проверка сборки: всё ли внутри .exe
+        f = af.Fisher()
+        with open(args[1], "w", encoding="utf-8") as out:
+            out.write("version=%s buffs=%s icons=%s portable=%s\n" % (
+                VERSION, f.buffs is not None, sorted(f.buffs.icons) if f.buffs else [], PORTABLE))
+        return
     if args[:1] == ["--make-icon"]:
         write_ico(args[1])
         return

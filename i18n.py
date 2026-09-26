@@ -113,6 +113,24 @@ EN = {
         "The bobber is not in the usual place — searching wider around the mark…",
     "Нашёл поплавок в стороне %s — теперь ищу его там.": "Found the bobber off to the side %s — will look there now.",
     "Нашёл поплавок.": "Found the bobber.",
+    "Пауза: окно Terraria не активно. Вернитесь в игру — продолжу сам.":
+        "Paused: the Terraria window is not active. Return to the game — I'll resume by myself.",
+    "Вернитесь в игру — продолжу сам через %d с": "Return to the game — I'll resume by myself in %d s",
+    "Вы вернулись в игру — продолжаю.": "You're back in the game — resuming.",
+    "Не получается %d раз подряд — попробую снова через %d с (попытка %d из %d).":
+        "Failed %d times in a row — will try again in %d s (attempt %d of %d).",
+    "Восстанавливаюсь…": "Recovering…",
+    "Попробую снова через %d с": "Will try again in %d s",
+    "Попробую продолжить через 5 с.": "Will try to continue in 5 s.",
+    "зелье рыбалки": "fishing potion",
+    "ящичное зелье": "crate potion",
+    "Выпил: %s.": "Drank: %s.",
+    "Не вижу баффа «%s» и после быстрого баффа — кончились зелья?":
+        "Still no “%s” buff after Quick Buff — out of potions?",
+    "Зелья": "Potions",
+    "Не получается выпить: %s. Кончились зелья?": "Can't drink: %s. Out of potions?",
+    "Поплавок уже в воде — продолжаю следить за ним.": "The bobber is already in the water — continuing to watch it.",
+    "Точки с прошлого запуска загружены. %s — продолжить.": "Points from the last run loaded. %s — resume.",
     "Поплавок не найден (непохожесть %.0f).": "Bobber not found (difference %.0f).",
     "Поплавок почти не виден (%d пикс.).": "Bobber barely visible (%d px).",
     "Поплавок у края окна — перезаброс.": "Bobber at the window edge — recasting.",
@@ -194,4 +212,33 @@ EN = {
     "Сохранять отладочные картинки (папка debug)": "Save debug pictures (debug folder)",
     "Режим записи: подсекаю я сам": "Record mode: I hook myself",
     "Проверить уведомление": "Test notification",
+
+    # --- вкладка «Автоматика»
+    " Автоматика ": " Automation ",
+    "Если что-то пошло не так": "If something goes wrong",
+    "Не сдаваться: после сбоев пробовать снова через 10, 30, 60 с":
+        "Don't give up: after failures try again in 10, 30, 60 s",
+    "Сам продолжать, когда я вернусь в игру из другого окна":
+        "Resume by itself when I return to the game from another window",
+    "Следить за баффами и пить зелья, когда бафф закончился": "Watch buffs and drink potions when a buff ends",
+    "Зелье рыбалки (бафф «Рыбалка»)": "Fishing Potion (“Fishing” buff)",
+    "Ящичное зелье (бафф «Ящики»)": "Crate Potion (“Crate” buff)",
+    "Клавиша быстрого баффа (как в игре)": "Quick Buff key (as in the game)",
+    "Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет, и не тратит зелья, если бафф ещё идёт. Держите в инвентаре только нужные зелья.":
+        "Quick Buff drinks every buff potion in the inventory whose buff is not active, and doesn't waste potions "
+        "while a buff is still active. Keep only the potions you need in the inventory.",
+    "Проверить баффы сейчас": "Check buffs now",
+    "Игра должна быть видна на экране (окно программы не должно её закрывать).":
+        "The game must be visible on the screen (not covered by the program window).",
+    "рыбалки": "fishing",
+    "ящиков": "crate",
+    "Зелья: ": "Potions: ",
+    "Зелья: не слежу (вкладка «Автоматика»)": "Potions: not watching (Automation tab)",
+    "Зелья: проверю при забросе": "Potions: will check on the next cast",
+    "Проверяю…": "Checking…",
+    "Окно Terraria не найдено — игра запущена?": "Terraria window not found — is the game running?",
+    "Не выбрано ни одного зелья.": "No potion selected.",
+    "Удалить Terraria AutoFish с этого компьютера?": "Remove Terraria AutoFish from this computer?",
+    "Удалить также настройки и сохранённые точки?": "Also remove the settings and saved points?",
+    "Terraria AutoFish удалена.": "Terraria AutoFish has been removed.",
 }

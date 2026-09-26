@@ -63,6 +63,17 @@ MAX_FAILS = 3         # столько неудачных забросов по�
 AUTO_CALIB = True     # автокалибровка: порог подсечки подбирается сам по тому, как качается поплавок
 CALIB_MARGIN = 0.2    #   порог = «спокойный минимум» (сколько поплавка видно на волнах) минус столько
 CALIB_MIN_CASTS = 2   #   после стольких забросов порог начинает подбираться сам
+
+AUTO_RECOVER = True   # после сбоев не вставать на паузу сразу, а пробовать продолжить
+RECOVER_WAITS = (10, 30, 60)   # сколько секунд ждать перед каждой новой попыткой
+AUTO_RESUME = True    # пауза из-за переключения в другое окно — продолжить, когда вернётесь в игру
+RESUME_AFTER = 2.0    #   ...через столько секунд в игре
+
+BUFFS_ON = False      # следить за зельями и пить их (клавишей быстрого баффа)
+BUFF_WANT = {"fishing": True, "crate": True}   # какие баффы держать
+BUFF_KEY = "b"        # клавиша быстрого баффа в Terraria (по умолчанию B)
+BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
+BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
 SOUND = True          # пищать при старте, отметке, паузе
 # ==================================================================
 
@@ -77,6 +88,8 @@ MOUSEEVENTF_LEFTUP = 0x0004
 # папка программы: рядом с .exe или со скриптом
 HERE = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
 DEBUG_DIR = os.path.join(HERE, "debug")
+# картинки (иконки баффов): внутри .exe — во временной папке PyInstaller, иначе — рядом со скриптом
+ASSET_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "assets")
 RECORD_DIR = os.path.join(HERE, "record")
 
 
@@ -184,7 +197,15 @@ def inside(region, cl):
             region["left"] + region["width"] <= cl[2] and region["top"] + region["height"] <= cl[3])
 
 
-def bobber_palette(frame, box, far_side):
+def light_factor(frame):
+    """Насколько картинка темнее обычной (1 — днём; меньше — ночью, в пещере). Во столько раз
+    можно смягчить пороги «насыщенности» и «отличия от фона», если поплавок иначе не виден."""
+    top = np.median(frame[:3].reshape(-1, 3), 0).max()
+    bottom = np.median(frame[-3:].reshape(-1, 3), 0).max()
+    return float(np.clip(max(top, bottom) / 110.0, 0.35, 1.0))
+
+
+def bobber_palette(frame, box, far_side, k=1.0):
     """Цвета надводной части поплавка: насыщенные пиксели в рамке box (x, y, w, h) выше
     линии воды, которых нет в фоне. Фон — верхние строки (небо), нижние (вода) и
     3 столбца с края far_side (-1 левый, +1 правый) — со стороны, противоположной леске:
@@ -201,18 +222,18 @@ def bobber_palette(frame, box, far_side):
     px = frame[y:min(y + h, waterline + 1), x:x + w].reshape(-1, 3)
     if not len(px):
         return px
-    far = np.abs(px[:, None] - bg[None]).max(2).min(1) > BG_DIST
-    vivid = (px.max(1) - px.min(1)) > SAT_MIN
+    far = np.abs(px[:, None] - bg[None]).max(2).min(1) > BG_DIST * k
+    vivid = (px.max(1) - px.min(1)) > SAT_MIN * k
     return np.unique((px[far & vivid] // 4) * 4, axis=0)
 
 
-def snap_bobber(frame, w, h, min_px):
+def snap_bobber(frame, w, h, min_px, k=1.0):
     """Ищет в кадре место w x h с наибольшим числом ярких насыщенных пикселей, не похожих
     на небо (верхние строки) и воду (нижние). Возвращает (x, y) левого верхнего угла или None."""
     sky = np.median(frame[:3].reshape(-1, 3), 0)
     water = np.median(frame[-3:].reshape(-1, 3), 0)
-    far = np.minimum(np.abs(frame - sky).max(2), np.abs(frame - water).max(2)) > BG_DIST
-    vivid = (frame.max(2) - frame.min(2)) > SAT_MIN
+    far = np.minimum(np.abs(frame - sky).max(2), np.abs(frame - water).max(2)) > BG_DIST * k
+    vivid = (frame.max(2) - frame.min(2)) > SAT_MIN * k
     m = (far & vivid).astype(np.int32)
     if m.shape[0] < h or m.shape[1] < w:
         return None
@@ -231,6 +252,51 @@ def snap_bobber(frame, w, h, min_px):
     if core.any(1).sum() < 3 or core.any(0).sum() < 3:
         return None
     return int(x), int(y)
+
+
+def snap_adaptive(frame, w, h, min_px):
+    """snap_bobber с обычными порогами, а если не нашлось — с порогами под яркость картинки."""
+    corner = snap_bobber(frame, w, h, min_px)
+    k = light_factor(frame)
+    if corner is None and k < 0.95:
+        corner = snap_bobber(frame, w, h, min_px, k)
+    return corner
+
+
+def press_key(name):
+    """Нажать клавишу в игре (например, B — быстрый бафф)."""
+    name = name.lower()
+    vk = {"space": 0x20}.get(name, ord(name.upper()) if len(name) == 1 else 0)
+    if not vk:
+        return
+    sc = user32.MapVirtualKeyW(vk, 0)
+    user32.keybd_event(vk, sc, 0, 0)
+    time.sleep(0.06)
+    user32.keybd_event(vk, sc, 2, 0)
+
+
+BUFF_NAMES = {"fishing": "зелье рыбалки", "crate": "ящичное зелье"}
+
+
+def BUFF_THRESHOLD():
+    import buffs
+    return buffs.THRESHOLD
+
+
+def find_terraria():
+    """Окно Terraria, даже если оно сейчас не активно (для проверки баффов из окна программы)."""
+    found = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
+    def each(hwnd, _):
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetWindowTextW(hwnd, buf, 256)
+        t = buf.value.lower()
+        if user32.IsWindowVisible(hwnd) and (t.startswith("terraria") or t.startswith("tmodloader")):
+            found.append(hwnd)
+        return True
+    user32.EnumWindows(each, 0)
+    return found[0] if found else None
 
 
 def same_colors(block, ref, share=0.5):
@@ -300,12 +366,13 @@ class Fisher:
       bobber   {img}                          — запомненный поплавок
       points   {saved}                        — сохранены ли точка заброса и поплавок
       calib    {ratio, casts, auto}           — порог подсечки (автокалибровка)
+      buffs    {status}                       — какие баффы есть: {"fishing": True, ...}
       hook     {why, waited}                  — подсечка
       notify   {title, text}                  — важное: пауза не по вашей команде, ошибка
     """
 
     def __init__(self, debug=False, record=False, events=None, toggle_key=None, exit_key=None,
-                 reset_key=None):
+                 reset_key=None, points_path=None):
         self.debug = debug
         self.record = record
         self.events = events
@@ -320,6 +387,17 @@ class Fisher:
         self.mark0 = self.bobber0 = None   # то, что игрок отметил сам, — для поиска потерянного поплавка
         self.calm_floors = deque(maxlen=8)  # автокалибровка: «спокойный минимум» по последним забросам
         self.hooks = self.casts = self.fails = 0
+        self.recover_round = 0             # сколько раз подряд уже пробовали восстановиться
+        self.errors = 0                    # ошибок подряд
+        self.resume_on_focus = False       # продолжить, когда игрок вернётся в окно игры
+        self.focus_since = None
+        try:                               # узнаём баффы по иконкам
+            import buffs
+            self.buffs = buffs.BuffWatcher(ASSET_DIR)
+        except Exception:
+            self.buffs = None
+        self.last_buff_check = 0.0
+        self.buff_backoff = {}
         self.started = None                # когда начали рыбачить (для «подсечек в час»)
         self.n = 0
         self.listeners = []
@@ -327,6 +405,7 @@ class Fisher:
         self.exit_key = key_from_name(exit_key) if exit_key else None
         self.set_reset_key(reset_key)
         self.set_scale(SCALE)
+        self.points_path = points_path     # файл, где точки хранятся между запусками программы
 
     # ---------- настройки ----------
     def set_scale(self, s):
@@ -377,6 +456,38 @@ class Fisher:
     def points_changed(self):
         self.emit("points", saved=self.has_points())
 
+    def save_points(self):
+        """Запомнить точку заброса и поплавок на диск — чтобы продолжить после перезапуска."""
+        if not self.points_path or not self.has_points() or self.bobber0 is None:
+            return
+        try:
+            os.makedirs(os.path.dirname(self.points_path), exist_ok=True)
+            np.savez(self.points_path, cast_point=self.cast_point, mark=self.mark, mark0=self.mark0,
+                     bobber=self.bobber, bobber0=self.bobber0, scale=self.scale)
+        except Exception:
+            pass
+
+    def load_points(self):
+        try:
+            d = np.load(self.points_path)
+            if abs(float(d["scale"]) - self.scale) > 1e-6 or d["bobber"].shape[:2] != (self.th, self.tw):
+                return False
+            self.cast_point = tuple(int(v) for v in d["cast_point"])
+            self.mark = tuple(int(v) for v in d["mark"])
+            self.mark0 = tuple(int(v) for v in d["mark0"])
+            self.bobber = d["bobber"].astype(np.float32)
+            self.bobber0 = d["bobber0"].astype(np.float32)
+            return True
+        except Exception:
+            return False
+
+    def delete_points(self):
+        try:
+            if self.points_path and os.path.exists(self.points_path):
+                os.remove(self.points_path)
+        except Exception:
+            pass
+
     # ---------- автокалибровка ----------
     def sink_ratio(self):
         """Текущий порог подсечки: подобранный автокалибровкой или заданный вручную."""
@@ -409,6 +520,7 @@ class Fisher:
             self.marking.clear()
             beep(1200, 80)
             return
+        self.resume_on_focus = False
         if self.running.is_set():
             self.stop_fishing(tr("Пауза (по вашей команде)."), notify=False)
             return
@@ -416,7 +528,7 @@ class Fisher:
             self.log(tr("Сначала переключитесь в окно Terraria."), "ask")
             self.state("idle", tr("Нужно окно Terraria"), tr("Переключитесь в игру и нажмите %s") % self.key_name)
             return
-        self.fails = 0
+        self.fails = self.recover_round = self.errors = 0
         if self.started is None:
             self.started = time.time()
         if self.has_points():
@@ -434,10 +546,12 @@ class Fisher:
 
     def reset_points(self):
         """Забыть точку заброса и поплавок: следующий старт — с выбором новых."""
+        self.resume_on_focus = False
         self.stop_fishing(tr("Пауза: выбираем новые точки."), notify=False)
         self.cast_point = self.mark = self.bobber = self.mark0 = self.bobber0 = None
         self.calm_floors.clear()
         self.calib_changed()
+        self.delete_points()
         self.log(tr("Точки сброшены. Наведите курсор на воду и нажмите %s.") % self.key_name, "ask")
         self.state("idle", tr("Выберите новые точки"), self.idle_hint())
         self.points_changed()
@@ -456,7 +570,19 @@ class Fisher:
                 beep(440)
 
     def pause(self, reason):
+        self.resume_on_focus = False
         self.stop_fishing(tr("Пауза: ") + reason)
+
+    def pause_window(self):
+        """Игрок переключился в другое окно. Если можно — продолжим сами, когда он вернётся."""
+        if AUTO_RESUME and self.has_points():
+            self.stop_fishing(tr("Пауза: окно Terraria не активно. Вернитесь в игру — продолжу сам."),
+                              notify=False)
+            self.resume_on_focus = True
+            self.focus_since = None
+            self.state("pause", tr("Пауза"), tr("Вернитесь в игру — продолжу сам через %d с") % RESUME_AFTER)
+        else:
+            self.pause(tr("окно Terraria не активно"))
 
     def forget_bobber(self):
         """Забыть поплавок — при следующем забросе программа попросит отметить его снова."""
@@ -487,8 +613,23 @@ class Fisher:
         self.fails += 1
         self.stats()
         self.reel("%s (%d/%d)" % (msg, self.fails, MAX_FAILS), "bad")
-        if self.fails >= MAX_FAILS:
-            self.pause(tr("не получается %d раз подряд. Нет наживки?") % MAX_FAILS)
+        if self.fails < MAX_FAILS or self.stopped():
+            return
+        if AUTO_RECOVER and self.recover_round < len(RECOVER_WAITS):
+            # Не сдаёмся: ждём (вдруг наступит утро, пройдёт дождь, уплывёт что-то мешающее),
+            # возвращаемся к исходной отметке и пробуем снова.
+            delay = RECOVER_WAITS[self.recover_round]
+            self.recover_round += 1
+            self.fails = 0
+            if self.mark0 is not None:
+                self.mark = self.mark0
+            self.log(tr("Не получается %d раз подряд — попробую снова через %d с (попытка %d из %d).")
+                     % (MAX_FAILS, delay, self.recover_round, len(RECOVER_WAITS)), "bad")
+            self.state("search", tr("Восстанавливаюсь…"), tr("Попробую снова через %d с") % delay)
+            self.wait(delay)
+            return
+        self.recover_round = 0
+        self.pause(tr("не получается %d раз подряд. Нет наживки?") % MAX_FAILS)
 
     def save_dbg(self, name, img, **kw):
         if self.debug or self.record:
@@ -522,7 +663,7 @@ class Fisher:
                 hint = tr("Отметка у края окна. Наведите на поплавок и нажмите %s ещё раз") % self.key_name
                 continue
             frame = grab(sct, area)
-            corner = snap_bobber(frame, tw, th, self.min_bobber_px)
+            corner = snap_adaptive(frame, tw, th, self.min_bobber_px)
             if corner is None:
                 self.log(tr("Рядом с курсором не видно поплавка — наведите точнее, прямо на него."), "ask")
                 hint = tr("Рядом с курсором нет поплавка. Наведите прямо на него и нажмите %s") % self.key_name
@@ -535,12 +676,13 @@ class Fisher:
             self.mark0, self.bobber0 = self.mark, self.bobber.copy()
             self.emit("bobber", img=self.bobber)
             self.points_changed()
+            self.save_points()
             self.n += 1
             self.save_dbg("%03d_poplavok.png" % self.n, self.bobber, scale=8)
             self.log(tr("Поплавок запомнен: %s. Дальше — автоматически.") % (self.mark,), "good")
             return self.mark
 
-    def search(self, sct, cl, center, half_x, half_y, wide=False):
+    def search(self, sct, cl, center, half_x, half_y, wide=False, strict=False):
         """Ищет поплавок в зоне вокруг center. Возвращает (центр или None, непохожесть).
         Обычный поиск — по текущему образцу. Широкий (wide) — ещё и по образцу, который
         отметил игрок, и просто по цветам поплавка."""
@@ -563,15 +705,15 @@ class Fisher:
             # Поэтому главное — есть ли в найденном месте сплошное яркое пятно поплавка.
             m = 6
             y0, x0 = max(0, y - m), max(0, x - m)
-            corner = snap_bobber(frame[y0:y + th + m, x0:x + tw + m], tw, th, self.min_bobber_px)
+            corner = snap_adaptive(frame[y0:y + th + m, x0:x + tw + m], tw, th, self.min_bobber_px)
             if corner is not None:
                 hit, blob = (x0 + corner[0], y0 + corner[1]), True
                 break
-            if err <= NOT_FOUND_ERR:
+            if err <= NOT_FOUND_ERR and not strict:
                 hit = (x, y)
                 break
         if hit is None and wide:
-            corner = snap_bobber(frame, tw, th, self.min_bobber_px)
+            corner = snap_adaptive(frame, tw, th, self.min_bobber_px)
             if corner is not None and same_colors(frame[corner[1]:corner[1] + th, corner[0]:corner[0] + tw],
                                                    self.bobber0 if self.bobber0 is not None else self.bobber):
                 hit, blob = corner, True
@@ -621,19 +763,79 @@ class Fisher:
         with (getattr(mss, "MSS", None) or mss.mss)() as sct:
             while not self.quit.is_set():
                 if not self.running.is_set():
+                    self.watch_focus()
                     time.sleep(0.05)
                     continue
                 try:
                     self.cycle(sct)
                 except Exception as e:  # чтобы поток не умер молча
+                    self.errors += 1
                     self.log(tr("Ошибка: %r") % e, "bad")
+                    if AUTO_RECOVER and self.errors <= 3:
+                        self.log(tr("Попробую продолжить через 5 с."))
+                        self.wait(5)
+                        continue
+                    self.errors = 0
                     self.emit("notify", title=tr("Ошибка"), text=repr(e))
                     self.pause(tr("ошибка"))
+
+    def watch_focus(self):
+        """На паузе из-за другого окна: как только игрок пару секунд снова в игре — продолжаем."""
+        if not (self.resume_on_focus and AUTO_RESUME and self.has_points()):
+            self.focus_since = None
+            return
+        if not terraria_window():
+            self.focus_since = None
+            return
+        now = time.perf_counter()
+        if self.focus_since is None:
+            self.focus_since = now
+        elif now - self.focus_since >= RESUME_AFTER:
+            self.resume_on_focus = False
+            self.focus_since = None
+            self.log(tr("Вы вернулись в игру — продолжаю."), "good")
+            self.on_toggle()
+
+    # ---------- зелья ----------
+    def check_buffs(self, sct, cl, force=False):
+        """Есть ли нужные баффы. Нет — нажать быстрый бафф и проверить, получилось ли."""
+        if self.buffs is None or not (BUFFS_ON or force):
+            return None
+        now = time.time()
+        if not force and now - self.last_buff_check < BUFF_CHECK_EVERY:
+            return None
+        self.last_buff_check = now
+        region = {"left": cl[0], "top": cl[1], "width": min(cl[2] - cl[0], 900),
+                  "height": min(cl[3] - cl[1], 360)}
+        want = [n for n in self.buffs.icons if BUFF_WANT.get(n)]
+        have = self.buffs.find(grab(sct, region))
+        status = {n: have[n] >= BUFF_THRESHOLD() for n in want}
+        self.emit("buffs", status=status)
+        if force:
+            return status
+        missing = [n for n in want if not status[n] and now >= self.buff_backoff.get(n, 0)]
+        if not missing:
+            return status
+        press_key(BUFF_KEY)
+        time.sleep(0.9)
+        have = self.buffs.find(grab(sct, region))
+        for n in missing:
+            if have[n] >= BUFF_THRESHOLD():
+                self.log(tr("Выпил: %s.") % tr(BUFF_NAMES[n]), "good")
+            else:
+                self.buff_backoff[n] = now + BUFF_BACKOFF
+                self.log(tr("Не вижу баффа «%s» и после быстрого баффа — кончились зелья?") % tr(BUFF_NAMES[n]),
+                         "bad")
+                self.emit("notify", title=tr("Зелья"),
+                          text=tr("Не получается выпить: %s. Кончились зелья?") % tr(BUFF_NAMES[n]))
+        status = {n: have[n] >= BUFF_THRESHOLD() for n in want}
+        self.emit("buffs", status=status)
+        return status
 
     def cycle(self, sct):
         hwnd = terraria_window()
         if not hwnd:
-            self.pause(tr("окно Terraria не активно"))
+            self.pause_window()
             return
         cl = client_rect(hwnd)
         cx, cy = self.cast_point
@@ -642,26 +844,41 @@ class Fisher:
         self.park = (player[0] + (10 if cx >= player[0] else -10),
                      max(cl[1] + 30, player[1] - int(130 * self.scale)))
 
-        # 1. заброс
-        self.state("cast", tr("Заброс"), tr("Мышь не трогайте"))
-        click(cx, cy)
-        self.casts += 1
-        self.stats()
-        if self.bobber is None:
-            pos = self.ask_mark(sct, cl)
-            if pos is None:
-                if not self.stopped():
-                    self.pause(tr("поплавок не отмечен"))
-                return
-        else:
+        # 0. Зелья: нет баффа — выпить (быстрым баффом)
+        self.check_buffs(sct, cl)
+
+        # Поплавок уже в воде (например, продолжаем после паузы)? Тогда не забрасываем —
+        #    клик по воде вытащил бы его — а сразу следим за ним.
+        pos = None
+        if self.bobber is not None and self.mark is not None:
             set_cursor(*self.park)
-            if not self.wait(SETTLE_TIME):
-                return
-            self.state("search", tr("Ищу поплавок"), tr("Мышь не трогайте"))
-            pos, err = self.locate(sct, cl)
-            if pos is None:
-                self.fail(tr("Поплавок не найден (непохожесть %.0f).") % err)
-                return
+            pos, _ = self.search(sct, cl, self.mark, self.zone_x, self.zone_y, strict=True)
+            if pos:
+                self.log(tr("Поплавок уже в воде — продолжаю следить за ним."))
+
+        # 1. заброс
+        if pos is None:
+            self.state("cast", tr("Заброс"), tr("Мышь не трогайте"))
+            click(cx, cy)
+            self.casts += 1
+            self.stats()
+            if self.bobber is None:
+                pos = self.ask_mark(sct, cl)
+                if pos is None:
+                    if not self.stopped():
+                        self.pause(tr("поплавок не отмечен"))
+                    return
+            else:
+                set_cursor(*self.park)
+                if not self.wait(SETTLE_TIME):
+                    return
+                self.state("search", tr("Ищу поплавок"), tr("Мышь не трогайте"))
+                pos, err = self.locate(sct, cl)
+                if pos is None:
+                    if self.stopped():          # поставили на паузу во время поиска — это не неудача
+                        return
+                    self.fail(tr("Поплавок не найден (непохожесть %.0f).") % err)
+                    return
 
         # 2. ждём поклёвку: следим, сколько поплавка видно над водой
         tw, th, rx, ry = self.tw, self.th, self.track_rx, self.track_ry
@@ -670,14 +887,20 @@ class Fisher:
             self.reel(tr("Поплавок у края окна — перезаброс."))
             return
         first = grab(sct, watch)
-        palette = bobber_palette(first, (rx, ry, tw, th), 1 if pos[0] >= player[0] else -1)
+        side = 1 if pos[0] >= player[0] else -1
+        palette = bobber_palette(first, (rx, ry, tw, th), side)
         det = BiteDetector(palette, debug=self.debug)
-        det.ratio = self.sink_ratio()
         base = det.visible(first) if len(palette) else 0
+        k = light_factor(first)
+        if base < self.min_bobber_px and k < 0.95:      # темно (ночь, пещера) — смягчаем пороги
+            palette = bobber_palette(first, (rx, ry, tw, th), side, k)
+            det = BiteDetector(palette, debug=self.debug)
+            base = det.visible(first) if len(palette) else 0
+        det.ratio = self.sink_ratio()
         if base < self.min_bobber_px:
             self.fail(tr("Поплавок почти не виден (%d пикс.).") % base)
             return
-        self.fails = 0
+        self.fails = self.recover_round = self.errors = 0
         self.stats()
         if self.record:
             while not self.clicks.empty():
@@ -695,7 +918,7 @@ class Fisher:
             if self.stopped():
                 return
             if not terraria_window():
-                self.pause(tr("окно Terraria не активно"))
+                self.pause_window()
                 return
             now = time.perf_counter()
             if now - start > max_wait:
@@ -805,9 +1028,14 @@ class Fisher:
             listener.daemon = True
             listener.start()
             self.listeners.append(listener)
+        if self.points_path and self.load_points():
+            self.log(tr("Точки с прошлого запуска загружены. %s — продолжить.") % self.key_name, "good")
+            self.emit("bobber", img=self.bobber)
+            self.points_changed()
         self.state("idle", tr("Готов"), self.idle_hint())
 
     def shutdown(self):
+        self.save_points()
         self.running.clear()
         self.marking.clear()
         self.quit.set()
