@@ -84,6 +84,7 @@ class FakeGame:
         self.sonar_now = False                       # надпись сонара есть, а поплавок ещё не нырнул
         self.catch_text = None                       # что поймано: (текст, цвет) — надпись о подборе
         self.pickup_until = 0.0                      # до какого времени видна надпись о подборе
+        self.pickup_life = 1.5                       # сколько секунд видна надпись о подборе
         self.selected = selected
         self.clicks, self.keys, self.used = [], [], []
         self.cursor = (self.BX, self.OFF)
@@ -122,7 +123,7 @@ class FakeGame:
                 self.out = False
                 self.clicks.append("вытащил")
                 if self.catch_text:                  # вытащил улов — над персонажем его название
-                    self.pickup_until = time.time() + 1.5
+                    self.pickup_until = time.time() + self.pickup_life
             else:
                 self.out = True
                 self.cast_t = time.time()

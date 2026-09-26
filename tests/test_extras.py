@@ -55,7 +55,9 @@ class TestInventory(unittest.TestCase):
             r.toggle()
             self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
             game.catch_text = ("Окунь", (255, 255, 255))
-            for n in range(1 + af.INV_FULL_HOOKS):
+            for n in range(2 + af.INV_FULL_HOOKS):   # +1: сразу после подбора надпись ещё видна
+                if not r.fisher.running.is_set():
+                    break
                 if n == 1:
                     game.catch_text = None           # инвентарь полон — надписи о подборе больше нет
                 time.sleep(0.8)
@@ -66,6 +68,38 @@ class TestInventory(unittest.TestCase):
                 r.wait_for(lambda: r.waiting() or not r.fisher.running.is_set(), 10)
             self.assertTrue(r.wait_for(lambda: not r.fisher.running.is_set(), 5), r.logs[-4:])
             self.assertTrue(any(af.tr("инвентарь полон") in l for l in r.logs), r.logs[-4:])
+        finally:
+            r.stop()
+            restore()
+            for n, v in saved.items():
+                setattr(af, n, v)
+
+
+class TestPickupStacks(unittest.TestCase):
+    def test_same_text_stays_no_false_pause(self):
+        # из игры: рыба клюёт каждые ~3 с, игра не пишет новую надпись о подборе, а прибавляет
+        # число к ещё висящей старой — раньше это принималось за полный инвентарь
+        saved = {n: getattr(af, n) for n in ("REEL_DELAY", "HEALTH_GUARD", "BUFFS_ON", "SONAR_FILTER")}
+        af.REEL_DELAY, af.HEALTH_GUARD, af.BUFFS_ON, af.SONAR_FILTER = 0.3, False, False, False
+        game = FakeGame(selected="5")
+        restore = game.install()
+        r = Run(game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            game.catch_text = ("Окунь", (255, 255, 255))
+            game.pickup_life = 1000                  # надпись не пропадает между поклёвками
+            for n in range(2 + af.INV_FULL_HOOKS):
+                time.sleep(0.8)
+                hooks = r.fisher.hooks
+                game.empty = True
+                self.assertTrue(r.wait_for(lambda: r.fisher.hooks > hooks, 5), r.logs[-4:])
+                game.empty = False
+                r.wait_for(lambda: r.waiting() or not r.fisher.running.is_set(), 10)
+                self.assertTrue(r.fisher.running.is_set(), r.logs[-4:])
+            self.assertTrue(r.fisher.running.is_set(), r.logs[-4:])
+            self.assertFalse(any(af.tr("инвентарь полон") in l for l in r.logs), r.logs[-4:])
+            self.assertEqual(sum(r.fisher.caught.values()) + r.fisher.caught_unknown, r.fisher.hooks)
         finally:
             r.stop()
             restore()

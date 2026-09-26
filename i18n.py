@@ -458,6 +458,8 @@ EN = {
     "Настройки → Видео → «Искажение от тепла».":
         "Above lava the text shimmers and doubles, so it's hard to read. Turn it off in the game: "
         "Settings → Video → \"Heat Distortion\".",
+    "Поймал: %s (ещё один — к надписи прибавилось число).":
+        "Caught: %s (one more — the number on the text went up).",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

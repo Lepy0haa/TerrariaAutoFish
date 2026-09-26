@@ -138,7 +138,13 @@ class CatchMixin:
         import sonar
         rd = sonar.PickupReader(self.scale)
         rd.reg = rd.region(player, cl)
-        rd.set_base(A.grab(sct, rd.reg))
+        frame = A.grab(sct, rd.reg)
+        rd.set_base(frame)
+        # надписи о подборе давно не было — место над персонажем «чистое», запомним его: если рыба
+        # клюёт часто, игра не пишет новую надпись, а прибавляет число к ещё висящей старой
+        if (self.pickup_clean is None or self.pickup_clean[0] != rd.reg
+                or time.time() - self.pickup_last > A.PICKUP_TEXT_LIFE):
+            self.pickup_clean = (dict(rd.reg), frame.copy())
         return rd
 
     def pickup_read(self, sct, rd):
@@ -151,8 +157,27 @@ class CatchMixin:
             self.save_dbg("%03d_podbor.png" % self.n, frame, scale=2)
         if rd.last_img is not None:
             self.save_dbg("%03d_podbor_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
-        self.check_inventory(rd.present)
+        present, same = rd.present, False
+        if not present and self.pickup_still_shown(rd, frame):
+            present = same = True                   # тот же предмет: игра прибавила число к старой надписи
+            self.save_dbg("%03d_podbor_to_zhe.png" % self.n, frame, scale=2)
+        if present:
+            self.pickup_last = time.time()
+        self.check_inventory(present)
+        if same:
+            item_id = self.pickup_last_id
+            if item_id is None:
+                self.caught_unknown += 1
+            else:
+                self.caught[item_id] = self.caught.get(item_id, 0) + 1
+                self.log(tr("Поймал: %s (ещё один — к надписи прибавилось число).") % self.catch_name(item_id),
+                         "good")
+            self.emit("catch", id=item_id, name=self.catch_name(item_id) if item_id is not None else None,
+                      wanted=True, biome=self.current_biome(), caught=True)
+            return item_id
         item_id = res[0] if isinstance(res, tuple) else None
+        if present:
+            self.pickup_last_id = item_id
         if item_id is None:
             self.caught_unknown += 1
             self.emit("catch", id=None, name=None, wanted=True, biome=self.current_biome(), caught=True)
@@ -163,6 +188,16 @@ class CatchMixin:
         self.emit("catch", id=item_id, name=self.catch_name(item_id), wanted=True, biome=self.current_biome(),
                   caught=True)
         return item_id
+
+    def pickup_still_shown(self, rd, frame):
+        """Новой надписи нет — а старая над персонажем всё ещё видна (сравниваем с «чистым» местом)?"""
+        if (self.pickup_clean is None or self.pickup_clean[0] != rd.reg
+                or time.time() - self.pickup_last > A.PICKUP_MERGE_MAX):
+            return False
+        import sonar
+        old = sonar.PickupReader(self.scale)
+        old.set_base(self.pickup_clean[1])
+        return old.extract(frame) is not None
 
     def check_inventory(self, present):
         """Надписи о подборе нет INV_FULL_HOOKS подсечек подряд, хотя раньше она была, — похоже,

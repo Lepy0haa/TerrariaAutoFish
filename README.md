@@ -176,7 +176,7 @@ wrong.
 |---|---|
 | The character takes damage — reel in and pause | Twice a second the program looks at the health hearts (top right). If there are noticeably fewer of them (8% — about 2 hearts of 20) on two checks in a row, it reels in, pauses and sends a notification. Health regeneration is not a problem: the program compares with the highest level it has seen |
 | Watch the bait | The game writes the bait count on the fishing rod. The digits are too small to read them reliably, but the number of digits is visible: less than 10 — a notification; no number — out of bait: the program stops right away instead of retrying |
-| The catch stopped being picked up (inventory full) — stop | If the pickup text doesn't appear for 3 hooks in a row (the catch falls on the ground), fishing pauses and you get a notification |
+| The catch stopped being picked up (inventory full) — stop | If the pickup text doesn't appear for 3 hooks in a row (the catch falls on the ground), fishing pauses and you get a notification. If the old text is still shown (with frequent bites the game only adds to its number), the catch counts as picked up |
 | Stop after, min / …or after this many hooks | 0 — don't stop. Time and hooks are counted as in the stats on the Fishing tab. When the limit is reached, the program reels in and stops |
 | Shut down the computer after such a stop | 60 s after the stop; the "Cancel shutdown" button (or `shutdown /a`) cancels it |
 
@@ -265,7 +265,7 @@ release with the description from `docs/releases/<tag>.md`.
 
 ### Tests
 
-`run_tests.bat` (or `python -m unittest discover -s tests`) runs 79 tests in about three minutes, most of them on
+`run_tests.bat` (or `python -m unittest discover -s tests`) runs 80 tests in about three minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
 taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
