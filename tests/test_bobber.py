@@ -1,10 +1,11 @@
 """Поиск поплавка по картинкам поплавков с Wiki — на зонах поиска из режима записи
 (светящийся поплавок ночью) и на широком кадре с пирсом, факелами, NPC и столбами."""
+import os
 import unittest
 
 import numpy as np
 
-from helpers import FakeSct, af, load_bgr
+from helpers import DATA, FakeSct, af, load_bgr
 
 ZONES = ("019", "022", "025", "026")
 
@@ -64,6 +65,28 @@ class TestBobber(unittest.TestCase):
     def test_auto_mark_nothing_new(self):
         pos, _ = self.auto_mark(self.pier, self.pier)
         self.assertIsNone(pos)
+
+    def test_template_stuck_on_wall(self):
+        # из журнала игрока: образец поплавка «переучился» на зеленоватую стену за водой, и
+        # каждый заброс находил стену (а цвета поплавка на ней — 0 пикс.). Поплавок — звёздочка
+        # правее. С известным видом поплавка находится звёздочка, а не стена
+        import numpy as np
+        from pngread import read_png
+        glow = load_bgr("bobber", "025_poisk.png", down=4)
+        for n, star_x in ((831, 39), (834, 45)):
+            raw = read_png(os.path.join(DATA, "bobber", "wall_%d.png" % n))[:, :, :3].astype(int)
+            g = (raw[:, :, 1] > 200) & (raw[:, :, 0] < 60) & (raw[:, :, 2] < 60)
+            ys, xs = np.nonzero(g)
+            bx, by = xs.min() // 4 + 1, ys.min() // 4 + 1                 # где была рамка (стена)
+            img = load_bgr("bobber", "wall_%d.png" % n, down=4)
+            H, W = img.shape[:2]
+            f = af.Fisher()
+            f.bobber0 = glow[31:53, 45:59].copy()
+            f.bobber = img[by:by + f.th, bx:bx + f.tw].copy()
+            f.bobber_kind = "acc_glowing"
+            pos, _ = f.search(FakeSct(lambda: img), (0, 0, W, H), (W // 2, H // 2), f.zone_x, f.zone_y)
+            self.assertIsNotNone(pos, n)
+            self.assertLessEqual(abs(pos[0] - star_x), 4, "%d: %s" % (n, pos))
 
     def test_wide_search_ignores_pier(self):
         f = af.Fisher()

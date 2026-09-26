@@ -218,8 +218,11 @@ EN = {
     # --- вкладка «Автоматика»
     " Автоматика ": " Automation ",
     "Если что-то пошло не так": "If something goes wrong",
-    "Не сдаваться: после сбоев пробовать снова через 3, 10, 20 с":
-        "Don't give up: after failures try again in 3, 10, 20 s",
+    "Не сдаваться: после сбоев пробовать снова каждые 2 с, без остановки":
+        "Don't give up: after failures try again every 2 s, without stopping",
+    "Не получается %d раз подряд — попробую снова через %d с (круг %d).":
+        "Failed %d times in a row — will try again in %d s (round %d).",
+    "Уже %d кругов неудачных забросов — загляните в игру.": "%d rounds of failed casts already — take a look at the game.",
     "Сам продолжать, когда я вернусь в игру из другого окна":
         "Resume by itself when I return to the game from another window",
     "Следить за баффами и пить зелья, когда бафф закончился": "Watch buffs and drink potions when a buff ends",

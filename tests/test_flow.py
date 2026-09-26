@@ -10,8 +10,8 @@ ROD = 4
 
 class TestFlow(unittest.TestCase):
     def setUp(self):
-        self.saved = {n: getattr(af, n) for n in ("REEL_DELAY", "RECOVER_WAITS", "ROD_SLOT", "AUTO_MARK", "AUTO_ROD")}
-        af.REEL_DELAY, af.RECOVER_WAITS = 0.3, (0.5, 0.5, 0.5)
+        self.saved = {n: getattr(af, n) for n in ("REEL_DELAY", "RECOVER_EVERY", "ROD_SLOT", "AUTO_MARK", "AUTO_ROD")}
+        af.REEL_DELAY, af.RECOVER_EVERY = 0.3, 0.5
         af.ROD_SLOT, af.AUTO_MARK, af.AUTO_ROD = None, True, True
         self.game = FakeGame(selected="5")
         self.restore = self.game.install()

@@ -76,7 +76,7 @@ CALIB_MIN_CASTS = 1   #   после стольких забросов поро�
 CALIB_NOW = 1.0       #   а до того — по текущему: через столько секунд спокойной воды
 
 AUTO_RECOVER = True   # после сбоев не вставать на паузу сразу, а пробовать продолжить
-RECOVER_WAITS = (3, 10, 20)    # сколько секунд ждать перед каждой новой попыткой
+RECOVER_EVERY = 2.0   # сколько секунд ждать перед каждым новым кругом попыток (без конца)
 AUTO_RESUME = True    # пауза из-за переключения в другое окно — продолжить, когда вернётесь в игру
 RESUME_AFTER = 2.0    #   ...через столько секунд в игре
 
@@ -903,18 +903,21 @@ class Fisher:
         self.wait(REEL_DELAY)
         if self.fails < MAX_FAILS or self.stopped():
             return
-        if AUTO_RECOVER and self.recover_round < len(RECOVER_WAITS):
-            # Не сдаёмся: ждём (вдруг наступит утро, пройдёт дождь, уплывёт что-то мешающее),
-            # возвращаемся к исходной отметке и пробуем снова.
-            delay = RECOVER_WAITS[self.recover_round]
+        if AUTO_RECOVER:
+            # Не сдаёмся: по кругу — подождать, вернуться к исходной отметке и пробовать снова
             self.recover_round += 1
             self.fails = 0
             if self.mark0 is not None:
                 self.mark = self.mark0
-            self.log(tr("Не получается %d раз подряд — попробую снова через %d с (попытка %d из %d).")
-                     % (MAX_FAILS, delay, self.recover_round, len(RECOVER_WAITS)), "bad")
-            self.state("search", tr("Восстанавливаюсь…"), tr("Попробую снова через %d с") % delay)
-            self.wait(delay)
+            if self.bobber0 is not None:
+                self.bobber = self.bobber0.copy()
+            self.log(tr("Не получается %d раз подряд — попробую снова через %d с (круг %d).")
+                     % (MAX_FAILS, RECOVER_EVERY, self.recover_round), "bad")
+            if self.recover_round == 10:
+                self.emit("notify", title=tr("Рыбалка"),
+                          text=tr("Уже %d кругов неудачных забросов — загляните в игру.") % self.recover_round)
+            self.state("search", tr("Восстанавливаюсь…"), tr("Попробую снова через %d с") % RECOVER_EVERY)
+            self.wait(RECOVER_EVERY)
             return
         self.recover_round = 0
         self.pause(tr("не получается %d раз подряд. Нет наживки?") % MAX_FAILS)
@@ -1279,14 +1282,22 @@ class Fisher:
             corner = snap_adaptive(frame[y0:y + th + m, x0:x + tw + m], tw, th, self.min_bobber_px)
             if corner is not None:
                 cand = (x0 + corner[0], y0 + corner[1])
-                # в широкой зоне бывает яркое и не поплавок (доски пирса, факелы) — сверяем цвета
-                if not wide or any(same_colors(frame[cand[1]:cand[1] + th, cand[0]:cand[0] + tw], r)
-                                   for r in (self.bobber, self.bobber0) if r is not None):
+                # яркое пятно бывает и не поплавком (стена, доски пирса, факелы) — проверяем, что это
+                # наш поплавок, иначе образец «переучится» на фон и дальше будет находиться фон
+                if self.bobber_here(frame, *cand):
                     hit, blob = cand, True
                     break
+                continue
             if err <= NOT_FOUND_ERR and not strict:
                 hit = (x, y)
                 break
+        if hit is None and self.bobber_kind and self.bobber_sprites is not None:
+            # по образцу не нашёлся — ищем по картинке этого вида поплавка с Вики во всей зоне
+            best = self.sprite_search(frame, only=[self.bobber_kind])
+            if best is not None and best[0] >= SPRITE_MIN:
+                x = int(np.clip(best[1] - tw // 2, 0, frame.shape[1] - tw))
+                y = int(np.clip(best[2] - th // 4 - th // 2, 0, frame.shape[0] - th))
+                hit, blob = (x, y), True
         if hit is None and wide:
             corner = snap_adaptive(frame, tw, th, self.min_bobber_px)
             ref = self.bobber0 if self.bobber0 is not None else self.bobber
@@ -1311,6 +1322,24 @@ class Fisher:
             self.log(tr("Поплавок: %s, непохожесть %.0f, пятно поплавка: %s%s")
                      % (pos, best_err, tr("есть") if blob else tr("нет"), tr(" (широкий поиск)") if wide else ""))
         return pos, best_err
+
+    def bobber_here(self, frame, x, y):
+        """Наш ли поплавок в кадре frame с левым верхним углом (x, y): по картинке этого вида
+        поплавка с Вики (не зависит от освещения), а если вид неизвестен — по цветам."""
+        tw, th = self.tw, self.th
+        if self.bobber_kind and self.bobber_sprites is not None:
+            pad = int(10 * self.scale)
+            patch = frame[max(0, y - pad):y + th + pad, max(0, x - pad):x + tw + pad]
+            r = self.bobber_sprites.find(patch, self.sprite_scales(), only=[self.bobber_kind])
+            return r is not None and r[0] >= SPRITE_MIN - 0.1
+        block = frame[y:y + th, x:x + tw]
+        ref = self.bobber0 if self.bobber0 is not None else self.bobber
+        if ref is None or same_colors(block, ref):
+            return True
+        # цвета исходного поплавка могли смениться (ночь) — тогда нужен и похожий силуэт: текущий
+        # образец мог «переучиться» на фон, одних его цветов мало
+        return (self.bobber is not None and same_colors(block, self.bobber) and
+                block.shape == ref.shape and bobber_likeness(block, ref) >= SIMILAR_MIN)
 
     def similarity(self, sct, pos):
         """Насколько силуэт в месте pos похож на запомненный поплавок (лучшее из текущего и
@@ -1732,6 +1761,8 @@ class Fisher:
         if len(det.palette):
             det.fit_top(first)                        # небо над поплавком не считаем (надпись сонара)
         if base < self.min_bobber_px:
+            if self.bobber0 is not None:
+                self.bobber, self.mark = self.bobber0.copy(), self.mark0   # образец мог «переучиться» на фон
             self.fail(tr("Поплавок почти не виден (%d пикс.).") % base)
             return
         self.fails = self.recover_round = self.errors = 0
