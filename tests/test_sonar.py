@@ -88,6 +88,43 @@ class TestRealFont(unittest.TestCase):
         self.assertGreaterEqual(right, 2)
 
 
+class TestTextMemory(unittest.TestCase):
+    """Память надписей: названия с настоящих снимков игры запоминаются и потом узнаются по образцу
+    (сдвиг, чуть другой порог выделения), а разные названия не путаются."""
+
+    def masks(self):
+        from helpers import hotbar as hb_img
+        out = {}
+        for i, key in ((1, "1"), (2, "5"), (3, None)):
+            img = (hb_img(key) if key else load_bgr("hotbar", "single_crate_potion.png"))[0:24, 100:460]
+            out[i] = img
+        return out
+
+    def test_learn_and_match(self):
+        import numpy as np
+        import textmemory
+        mem = textmemory.TextMemory()
+        imgs = self.masks()
+        for i, img in imgs.items():
+            self.assertTrue(mem.learn(img.min(2) > 200, i))
+        self.assertFalse(mem.learn(imgs[1].min(2) > 200, 1))          # такой образец уже есть
+        for i, img in imgs.items():
+            hit = mem.match(np.roll(img.min(2) > 200, 1, axis=1))
+            self.assertIsNotNone(hit)
+            self.assertEqual(hit[0], i)
+        self.assertIsNone(mem.match(textimg.render("Окунь", 16)))      # незнакомое — не узнаётся
+
+    def test_saved_to_disk(self):
+        import tempfile
+        import textmemory
+        path = os.path.join(tempfile.mkdtemp(), "names.npz")
+        img = self.masks()[2]
+        textmemory.TextMemory(path).learn(img.min(2) > 200, 7)
+        again = textmemory.TextMemory(path)
+        self.assertEqual(again.count(), 1)
+        self.assertEqual(again.match(img.min(2) > 200)[0], 7)
+
+
 class TestFlash(unittest.TestCase):
     def test_text_is_not_lightning(self):
         # надпись сонара в верхних строках окошка — не вспышка молнии (раньше поклёвка под
@@ -171,6 +208,47 @@ class TestSonarFlow(unittest.TestCase):
             self.assertTrue(any("Окунь" in l and af.tr("Подсекаю")[:6] in l for l in r.logs), r.logs[-4:])
             self.assertGreaterEqual(self.game.clicks.count("заброс"), casts)
         finally:
+            r.stop()
+
+    def test_text_alone_is_a_bite(self):
+        # поплавок ещё не нырнул, а надпись сонара уже появилась — это поклёвка
+        r = Run(self.game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            time.sleep(1.0)
+            self.game.bite_text, self.game.sonar_now = ("Старый ботинок", (170, 170, 170)), True
+            self.assertTrue(r.wait_for(lambda: r.fisher.skipped == 1, 5), r.logs[-4:])      # мусор — пропуск
+            self.assertEqual(r.fisher.hooks, 0)
+            self.game.sonar_now, self.game.bite_text = False, None
+            time.sleep(1.5)
+            self.game.bite_text, self.game.sonar_now = ("Окунь", (255, 255, 255)), True
+            self.assertTrue(r.wait_for(lambda: r.fisher.hooks == 1, 5), r.logs[-4:])        # окунь — подсечка
+            self.assertTrue(any(af.tr("надпись сонара") in l for l in r.logs), r.logs[-4:])
+        finally:
+            self.game.sonar_now, self.game.bite_text = False, None
+            r.stop()
+
+    def test_angler_quest_fish(self):
+        # задание рыбака: поймали нужную рыбу (по надписи о подборе) — пауза
+        c = catches.Catches(DATA)
+        derp = by_ru(c, "Рыба-крикун")
+        saved = af.QUEST_FISH
+        af.QUEST_FISH, af.SONAR_FILTER, af.CATCH_WANT = derp, False, {}
+        r = Run(self.game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            time.sleep(1.0)
+            self.game.catch_text = ("Рыба-крикун", (255, 150, 150))
+            self.game.empty = True
+            self.assertTrue(r.wait_for(lambda: not r.fisher.running.is_set(), 8), r.logs[-4:])
+            self.game.empty = False
+            self.assertTrue(any(af.tr("Поймал рыбу для задания рыбака: %s!") % "Рыба-крикун" == l for l in r.logs),
+                            r.logs[-4:])
+        finally:
+            af.QUEST_FISH = saved
+            self.game.catch_text = None
             r.stop()
 
     def test_biome_from_what_was_caught(self):

@@ -96,7 +96,14 @@ CATCH_BIOME = "auto"  # где рыбачим: ключ биома или "auto"
 SONAR_SKIP_PAUSE = 1.0    # пропустили ненужный улов — столько секунд не считать поклёвкой
 SKIP_MIN_RATIO = 0.6  # отпускать улов, только если название прочитано уверенно: похожесть не ниже
 SKIP_MIN_MARGIN = 0.15    #   ...и отрыв от второго по похожести названия не меньше (иначе — подсекаем)
+LEARN_MIN_RATIO = 0.6     # название прочитано так уверенно — запомнить, как оно выглядит (память надписей)
+LEARN_MIN_MARGIN = 0.2
 READ_PICKUP = True    # после подсечки читать над персонажем, что поймано (биом, учёт улова)
+SONAR_TEXT_BITE = True    # с выбором улова по сонару поклёвка — ещё и появление надписи над поплавком
+SONAR_TEXT_EVERY = 0.05   #   ...смотреть на место надписи раз в столько секунд
+QUEST_FISH = None     # рыба для задания рыбака (id): поймали — пауза и уведомление
+INV_FULL_STOP = True  # улов перестал подбираться (инвентарь полон) — остановиться
+INV_FULL_HOOKS = 3    #   ...если после стольких подсечек подряд нет надписи о подборе
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
 AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
 SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
@@ -641,7 +648,16 @@ class Fisher:
             self.catches = None
         self.recent_catch = deque(maxlen=12)   # что клевало в последнее время (id) — чтобы угадать биом
         self.ocr_ok = None                 # доступно ли распознавание текста Windows
+        try:                               # память надписей: как выглядят названия уже узнанного улова
+            import textmemory
+            self.memory = textmemory.TextMemory(
+                os.path.join(os.path.dirname(points_path), "names.npz") if points_path else None)
+        except Exception:
+            self.memory = None
         self.caught = {}                   # что поймано (по надписи о подборе): id -> сколько раз
+        self.caught_unknown = 0            # подсечки, после которых улов не узнали
+        self.pickup_seen = False           # надпись о подборе хоть раз была (значит, её видно)
+        self.no_pickup = 0                 # подсечек подряд без надписи о подборе
         self.sonar_buff_warned = 0.0       # когда последний раз предупреждали, что баффа сонара нет
         self.last_sonar_check = 0.0
         self.rod_slot = None               # в каком слоте хотбара удочка (0..9) — запоминаем по удачному забросу
@@ -731,15 +747,15 @@ class Fisher:
 
     def load_points(self):
         try:
-            d = np.load(self.points_path)
-            if abs(float(d["scale"]) - self.scale) > 1e-6 or d["bobber"].shape[:2] != (self.th, self.tw):
-                return False
-            self.cast_point = tuple(int(v) for v in d["cast_point"])
-            self.mark = tuple(int(v) for v in d["mark"])
-            self.mark0 = tuple(int(v) for v in d["mark0"])
-            self.bobber = d["bobber"].astype(np.float32)
-            self.bobber0 = d["bobber0"].astype(np.float32)
-            self.bobber_kind = str(d["bobber_kind"]) if "bobber_kind" in d.files and str(d["bobber_kind"]) else None
+            with np.load(self.points_path) as d:             # with — чтобы файл не оставался открытым
+                if abs(float(d["scale"]) - self.scale) > 1e-6 or d["bobber"].shape[:2] != (self.th, self.tw):
+                    return False
+                self.cast_point = tuple(int(v) for v in d["cast_point"])
+                self.mark = tuple(int(v) for v in d["mark"])
+                self.mark0 = tuple(int(v) for v in d["mark0"])
+                self.bobber = d["bobber"].astype(np.float32)
+                self.bobber0 = d["bobber0"].astype(np.float32)
+                self.bobber_kind = str(d["bobber_kind"]) if "bobber_kind" in d.files and str(d["bobber_kind"]) else None
             self.phase = "unknown"
             self.gear_changed()
             return True
@@ -1792,6 +1808,7 @@ class Fisher:
         live_min = None                 # самое малое «видно» между обновлениями полоски
         rd = self.sonar_reader(sct, cl, pos)       # надпись зелья сонара (или None)
         last_base, ignore_until = start, 0.0
+        text_on, last_text = False, start          # надпись сонара уже висит / когда смотрели
         while True:
             if self.stopped():
                 return
@@ -1821,6 +1838,16 @@ class Fisher:
             frame = grab(sct, watch)
             t = now - start
             why = det.feed(frame, t)
+            if rd is not None and SONAR_FILTER and SONAR_TEXT_BITE and now - last_text >= SONAR_TEXT_EVERY:
+                # над поплавком появилась надпись сонара — это поклёвка, даже если поплавок ещё не нырнул
+                last_text = now
+                tw_, th_ = self.tw, self.th
+                bx, by = pos[0] - rd.reg["left"], pos[1] - rd.reg["top"]
+                present = rd.extract(grab(sct, rd.reg), (bx - tw_ // 2 - 6, by - th_ // 2 - 6,
+                                                         bx + tw_ // 2 + 6, by + th_ // 2 + 6)) is not None
+                if present and not text_on and not why and t >= CALIB_TIME:
+                    why = tr("надпись сонара")
+                text_on = present
             if why and t < ignore_until:
                 why = None                           # это всё ещё пропущенный (ненужный) улов
             if rd is not None and not why and now - last_base > 1.0 and det.ref and not det.flash \
@@ -1864,6 +1891,7 @@ class Fisher:
                     continue
                 if dec is not None:
                     why = "%s, %s" % (self.catch_name(dec[0]), why)
+                hooked_id = dec[0] if dec is not None else None
                 self.hooks += 1
                 self.stats()
                 self.state("hook", tr("Поклёвка!"), tr("Подсекаю…"))
@@ -1873,10 +1901,24 @@ class Fisher:
                 pk = self.pickup_start(sct, cl, player)
                 self.reel(tr("Поклёвка (%s)! Подсекаю. Подсечек: %d (ждали %.1f с)")
                           % (why, self.hooks, t), "good")
+                caught_id = None
                 if pk is not None and not self.stopped():
-                    self.pickup_read(sct, pk)                # что поймано — для учёта и биома
+                    caught_id = self.pickup_read(sct, pk)    # что поймано — для учёта и биома
+                self.check_quest(caught_id or hooked_id)
                 return
             time.sleep(POLL)
+
+    # ---------- задание рыбака ----------
+    def check_quest(self, item_id):
+        """Поймали рыбу для задания рыбака — пауза и уведомление."""
+        if QUEST_FISH is None or item_id != QUEST_FISH or self.catches is None:
+            return
+        name = self.catch_name(item_id)
+        self.log(tr("Поймал рыбу для задания рыбака: %s!") % name, "good")
+        self.emit("notify", title=tr("Задание рыбака"), text=tr("Поймана %s — отнесите её рыбаку.") % name)
+        self.resume_on_focus = False
+        self.stop_fishing(tr("Пауза: рыба для задания рыбака поймана."), notify=False)
+        beep(1200, 150)
 
     # ---------- сонар: выбор улова ----------
     def catch_name(self, item_id):
@@ -1917,25 +1959,45 @@ class Fisher:
         if rd.text_mask(frame).sum() < 15:
             rd.set_base(frame)
 
+    def read_name(self, rd, frame, exclude=None, use_ocr=True):
+        """Какой предмет написан: (id, похожесть, отрыв, прочтения) или None — надписи нет.
+        Сначала — память надписей (без ошибок OCR), потом OCR; уверенно прочитанное запоминается."""
+        m = rd.extract(frame, exclude)
+        if m is None:
+            return None
+        if self.memory is not None:
+            hit = self.memory.match(m)
+            if hit is not None:
+                return hit[0], 1.0, hit[2], []
+        if not use_ocr or not self.ocr_ready():
+            return None, 0.0, 0.0, []
+        texts = rd.ocr(m)
+        item_id, ratio, margin = self.catches.identify_any(texts) if texts else (None, 0.0, 0.0)
+        if item_id is not None and ratio >= LEARN_MIN_RATIO and margin >= LEARN_MIN_MARGIN and self.memory is not None:
+            self.memory.learn(m, item_id)
+        return item_id, ratio, margin, texts
+
     def sonar_decide(self, sct, rd, pos):
         """Прочитать надпись сонара: (id, ловить ли) или None — надписи нет / не узнали."""
         tw, th = self.tw, self.th
         bx, by = pos[0] - rd.reg["left"], pos[1] - rd.reg["top"]
         frame = grab(sct, rd.reg)
-        texts = rd.read_all(frame, (bx - tw // 2 - 6, by - th // 2 - 6, bx + tw // 2 + 6, by + th // 2 + 6))
+        res = self.read_name(rd, frame, (bx - tw // 2 - 6, by - th // 2 - 6, bx + tw // 2 + 6, by + th // 2 + 6))
         self.n += 1
-        if rd.last_img is not None:
+        if rd.present:
             self.save_dbg("%03d_sonar.png" % self.n, frame, scale=2)
+        if rd.last_img is not None:
             self.save_dbg("%03d_sonar_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
-        if not texts:
+        if res is None:
             return None
-        item_id, ratio, margin = self.catches.identify_any(texts)
+        item_id, ratio, margin, texts = res
         if item_id is None:
-            self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % texts[0])
+            if texts:
+                self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % texts[0])
             return None
         self.recent_catch.append(item_id)
         biome = self.current_biome()
-        wanted = not CATCH_WANT or self.catches.wanted(item_id, CATCH_WANT, biome)
+        wanted = not CATCH_WANT or self.catches.wanted(item_id, CATCH_WANT, biome) or item_id == QUEST_FISH
         if not wanted and (ratio < SKIP_MIN_RATIO or margin < SKIP_MIN_MARGIN):
             # отпускать можно только уверенно прочитанное — иначе можно упустить нужное
             self.log(tr("Сонар: похоже на «%s», но не уверен — подсекаю.") % self.catch_name(item_id))
@@ -1944,8 +2006,9 @@ class Fisher:
         return item_id, wanted
 
     def pickup_start(self, sct, cl, player):
-        """Перед подсечкой: снимок места над персонажем, где появится надпись о подборе."""
-        if not READ_PICKUP or not self.ocr_ready():
+        """Перед подсечкой: снимок места над персонажем, где появится надпись о подборе. Нужен и без
+        OCR: по тому, появилась ли надпись, видно, что инвентарь полон."""
+        if not (READ_PICKUP or INV_FULL_STOP):
             return None
         import sonar
         rd = sonar.PickupReader(self.scale)
@@ -1957,15 +2020,17 @@ class Fisher:
         """После подсечки: что поймано (надпись о подборе над персонажем). Для учёта и угадывания
         биома. id или None."""
         frame = grab(sct, rd.reg)
-        texts = rd.read_all(frame)
+        res = self.read_name(rd, frame, use_ocr=READ_PICKUP) if self.catches is not None else rd.extract(frame)
         self.n += 1
-        if rd.last_img is not None:
+        if rd.present:
             self.save_dbg("%03d_podbor.png" % self.n, frame, scale=2)
+        if rd.last_img is not None:
             self.save_dbg("%03d_podbor_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
-        if not texts:
-            return None
-        item_id, ratio, margin = self.catches.identify_any(texts)
+        self.check_inventory(rd.present)
+        item_id = res[0] if isinstance(res, tuple) else None
         if item_id is None:
+            self.caught_unknown += 1
+            self.emit("catch", id=None, name=None, wanted=True, biome=self.current_biome(), caught=True)
             return None
         self.recent_catch.append(item_id)
         self.caught[item_id] = self.caught.get(item_id, 0) + 1
@@ -1973,6 +2038,19 @@ class Fisher:
         self.emit("catch", id=item_id, name=self.catch_name(item_id), wanted=True, biome=self.current_biome(),
                   caught=True)
         return item_id
+
+    def check_inventory(self, present):
+        """Надписи о подборе нет INV_FULL_HOOKS подсечек подряд, хотя раньше она была, — похоже,
+        инвентарь полон (улов падает на землю)."""
+        if present:
+            self.pickup_seen, self.no_pickup = True, 0
+            return
+        self.no_pickup += 1
+        if not (INV_FULL_STOP and self.pickup_seen and self.no_pickup >= INV_FULL_HOOKS):
+            return
+        self.no_pickup = 0
+        self.log(tr("Улов перестал подбираться %d раз подряд — похоже, инвентарь полон.") % INV_FULL_HOOKS, "bad")
+        self.pause(tr("инвентарь полон"))
 
     def check_sonar_buff(self, sct, cl):
         """Выбор улова включён, а баффа сонара нет — надписи не будет: предупредить (раз в 5 минут)."""

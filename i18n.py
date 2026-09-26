@@ -313,10 +313,78 @@ EN = {
         "The character is taking damage (%d%% less health) — reeled in and paused.",
     "персонаж получает урон": "the character is taking damage",
     "Наживка": "Bait",
+    # задание рыбака, надпись сонара
+    "(нет задания)": "(no quest)",
+    "Задание рыбака": "Angler quest",
+    "надпись сонара": "sonar text",
+    "Поймал рыбу для задания рыбака: %s!": "Caught the fish for the Angler quest: %s!",
+    "Поймана %s — отнесите её рыбаку.": "%s is caught — bring it to the Angler.",
+    "Пауза: рыба для задания рыбака поймана.": "Pause: the fish for the Angler quest is caught.",
+    # полный инвентарь, отчёт об улове
+    "инвентарь полон": "inventory is full",
+    "Улов перестал подбираться %d раз подряд — похоже, инвентарь полон.":
+        "The catch wasn't picked up %d times in a row — the inventory seems to be full.",
+    "Подсечек: %d · узнано: %d · не узнано: %d · пропущено сонаром: %d":
+        "Hooks: %d · recognized: %d · not recognized: %d · skipped by sonar: %d",
+    " · в час: %.0f": " · per hour: %.0f",
+    "Отчёт об улове": "Catch report",
+    "Улов": "Catch",
+    "Сколько": "Count",
+    "Где ловится": "Where it's caught",
+    "Закрыть": "Close",
+    "Сохранить CSV": "Save CSV",
+    "Улов узнаётся по надписи о подборе над персонажем после каждой подсечки.":
+        "The catch is recognized by the pickup text above the character after every hook.",
+    "пока ничего не узнано": "nothing recognized yet",
+    "Отчёт об улове сохранён: %s": "Catch report saved: %s",
+    "Не удалось сохранить отчёт об улове: %r": "Couldn't save the catch report: %r",
+    "Наживка: мало — предупредить, кончилась — остановиться": "Bait: low — warn, none left — stop",
+    "Улов перестал подбираться (инвентарь полон) — остановиться": "The catch isn't picked up (inventory full) — stop",
+    "Остановиться через, мин (0 — нет)": "Stop after, min (0 — never)",
+    "…или после стольких подсечек (0 — нет)": "…or after this many hooks (0 — never)",
+    "Потом выключить компьютер (через 60 с)": "Then shut down the computer (in 60 s)",
+    # обновления, трей, мастер первого запуска
+    "Вышла новая версия %s — %s": "New version %s is out — %s",
+    "Вышла новая версия %s. Скачать — на странице релиза на GitHub.":
+        "New version %s is out. Download it from the release page on GitHub.",
+    "Показать окно": "Show window",
+    "Пауза / продолжить": "Pause / resume",
+    "Как начать": "Getting started",
+    "Выход": "Exit",
+    "Обновления": "Updates",
+    "Не удалось проверить обновления: %s": "Couldn't check for updates: %s",
+    "У вас последняя версия (%s).": "You have the latest version (%s).",
+    "доступна %s": "%s available",
+    "Добро пожаловать!": "Welcome!",
+    "Terraria AutoFish рыбачит за вас: следит за поплавком, подсекает, когда клюёт, и забрасывает снова. Работает только по картинке на экране и нажатиям — в игру и её файлы не лезет.\n\nЧетыре коротких шага — и можно начинать.":
+        "Terraria AutoFish fishes for you: it watches the bobber, hooks when a fish bites and casts again. "
+        "It works only with what is on the screen and key presses — it doesn't touch the game or its files.\n\n"
+        "Four short steps — and you can start.",
+    "1. Настройте игру": "1. Set up the game",
+    "• Режим экрана — «Оконный» или «Без рамки» (в полноэкранном программа не видит игру).\n• «Масштаб» (Zoom) в настройках игры — такой же, как на вкладке «Настройки» программы (по умолчанию 100 %).\n• Во время рыбалки окно игры не закрывайте другими окнами.":
+        "• Display mode — Windowed or Borderless (in fullscreen the program can't see the game).\n"
+        "• Zoom in the game settings — the same as on the program's Settings tab (100% by default).\n"
+        "• While fishing, don't cover the game window with other windows.",
+    "2. Удочка, наживка, зелья": "2. Fishing rod, bait, potions",
+    "• Возьмите удочку, наживка — в инвентаре. Удочку программа потом берёт в руки сама.\n• Зелья рыбалки, ящиков, сонара и спокойствия положите в хотбар — программа будет пить их сама (вкладка «Автоматика»).\n• С зельем сонара можно выбирать, что ловить в каждом биоме (вкладка «Улов»).":
+        "• Hold the fishing rod, keep bait in the inventory. Later the program takes the rod in hand itself.\n"
+        "• Put Fishing, Crate, Sonar and Calming potions into the hotbar — the program will drink them "
+        "(Automation tab).\n"
+        "• With the Sonar Potion you can choose what to catch in every biome (Catch tab).",
+    "3. Старт": "3. Start",
+    "• Наведите курсор на воду и нажмите %s — программа забросит и сама найдёт поплавок.\n• %s ещё раз — пауза, потом снова %s — продолжить с теми же точками.\n• %s — выбрать новое место.\n• Свёрнутая программа живёт в трее, рядом с часами.\n\nМышь во время рыбалки не трогайте. Удачного клёва!":
+        "• Point at the water and press %s — the program casts and finds the bobber itself.\n"
+        "• %s again — pause, then %s again — resume with the same points.\n"
+        "• %s — choose a new spot.\n"
+        "• When minimized, the program lives in the tray, next to the clock.\n\n"
+        "Don't touch the mouse while fishing. Good luck!",
+    "Далее": "Next",
+    "Назад": "Back",
+    "Готово": "Done",
     # улов по сонару
     " Улов ": " Catch ",
     " (хардмод)": " (hardmode)",
-    "Авто (по тому, что клюёт и ловится)": "Auto (by what bites and is caught)",
+    "Авто (по улову)": "Auto (by the catch)",
     "Всё": "All",
     "Ничего": "None",
     "Выбирать улов по зелью сонара": "Choose the catch using the Sonar Potion",

@@ -42,7 +42,8 @@ DEFAULTS = {
     "auto_rod": True, "auto_mark": True, "rod_slot": "auto",
     "buff_sonar": False, "buff_calm": False, "health_guard": True, "bait_watch": True,
     "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
-    "sonar_filter": False, "catch_biome": "auto", "catch_want": {},
+    "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
+    "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -280,6 +281,7 @@ class Overlay(tk.Toplevel):
 
 class App:
     def __init__(self, selftest=None, lang=None):
+        self.first_run = not os.path.exists(CFG_PATH)      # на этом компьютере ещё не запускали
         self.cfg = load_cfg()
         self.selftest = selftest
         if selftest:
@@ -297,6 +299,8 @@ class App:
         self.gear = {"rod_slot": None, "manual": False, "bobber": None}
         self.bait = None                  # сколько цифр наживки видно на удочке
         self.catch_info = None            # последнее, что прочитал сонар
+        self.tray = None                  # значок в трее
+        self.update_url = None
         self.calib = {"ratio": af.SINK_RATIO, "casts": 0, "auto": af.AUTO_CALIB}
         self.fisher = None
 
@@ -323,12 +327,17 @@ class App:
         self.fisher.set_scale(self.cfg["scale"])
         self.overlay = None
         self.toggle_overlay()
+        self.root.after(3000, self.check_updates)
         if selftest:
             # самопроверка не слушает клавиши и мышь (HOME в игре не должен запускать её рыбалку)
             self.fisher.state("idle", tr("Готов"), self.fisher.idle_hint())
         else:
             self.start_log_file()
             self.fisher.start()
+            self.start_tray()
+            if self.first_run and not self.cfg["wizard_done"]:
+                self.root.after(800, self.show_wizard)
+        self.root.bind("<F1>", lambda e: self.show_wizard())
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(50, self.pump)
@@ -388,9 +397,11 @@ class App:
         af.STOP_AFTER_MIN = int(self.cfg["stop_after_min"])
         af.STOP_AFTER_HOOKS = int(self.cfg["stop_after_hooks"])
         af.SHUTDOWN_AFTER = bool(self.cfg["shutdown_after"])
+        af.INV_FULL_STOP = bool(self.cfg["inv_full_stop"])
         af.SONAR_FILTER = bool(self.cfg["sonar_filter"])
         af.CATCH_BIOME = self.cfg["catch_biome"]
         af.CATCH_WANT = {k: set(v) for k, v in (self.cfg["catch_want"] or {}).items()}
+        af.QUEST_FISH = self.cfg.get("quest_fish")
         af.BUFF_KEY = self.cfg["buff_key"]
         af.BUFF_METHOD = self.cfg["buff_method"]
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
@@ -633,6 +644,8 @@ class App:
             APP, tr("Так выглядят уведомления программы"))).pack(side="left")
         # всё для разбора проблемы — одним архивом: журнал, настройки, отладочные картинки
         ttk.Button(bf, text=tr("Собрать отчёт"), command=self.make_report).pack(side="right")
+        ttk.Button(bf, text=tr("Обновления"), command=lambda: self.check_updates(force=True)).pack(
+            side="right", padx=(0, 6))
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -727,8 +740,11 @@ class App:
             return
         c, ru = self.catch_data, i18n.LANG == "ru"
         var = tk.BooleanVar(value=bool(self.cfg["sonar_filter"]))
-        ttk.Checkbutton(box, text=tr("Выбирать улов по зелью сонара"), variable=var,
-                        command=lambda: self.set_auto_opt("sonar_filter", var.get())).pack(anchor="w")
+        top = ttk.Frame(box, style="Card.TFrame")
+        top.pack(fill="x")
+        ttk.Checkbutton(top, text=tr("Выбирать улов по зелью сонара"), variable=var,
+                        command=lambda: self.set_auto_opt("sonar_filter", var.get())).pack(side="left")
+        ttk.Button(top, text=tr("Отчёт об улове"), command=self.show_catch_report).pack(side="right")
         ttk.Label(box, text=tr("Зелье сонара пишет над поплавком, что клюнуло. Программа читает надпись и "
                                "подсекает только отмеченное, остальное пропускает. Не прочитала — подсекает."),
                   style="Muted.TLabel", wraplength=390, justify="left").pack(anchor="w", padx=(22, 0))
@@ -736,9 +752,19 @@ class App:
         def row(text):
             r = ttk.Frame(box, style="Card.TFrame")
             r.pack(fill="x", pady=(6, 0))
-            ttk.Label(r, text=text, style="Card.TLabel", width=12).pack(side="left")
+            ttk.Label(r, text=text, style="Card.TLabel", width=15).pack(side="left")
             return r
-        biomes = [("auto", tr("Авто (по тому, что клюёт и ловится)"))] + [(g["key"], g["ru"] if ru else g["en"])
+        # задание рыбака: поймали нужную рыбу — пауза и уведомление
+        quest = [(None, tr("(нет задания)"))] + sorted({it["id"]: (it["id"], it["ru"] if ru else it["en"])
+                                              for g in c.groups for it in g["items"] if it.get("quest")}.values(),
+                                             key=lambda x: x[1])
+        self.quest_var = tk.StringVar(value=dict(quest).get(self.cfg.get("quest_fish"), quest[0][1]))
+        qb = ttk.Combobox(row(tr("Задание рыбака")), textvariable=self.quest_var, values=[t for _, t in quest],
+                          state="readonly", width=30)
+        qb.pack(side="left")
+        qb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt(
+            "quest_fish", {t: k for k, t in quest}[self.quest_var.get()]))
+        biomes = [("auto", tr("Авто (по улову)"))] + [(g["key"], g["ru"] if ru else g["en"])
                                                                  for g in c.biomes()]
         self.biome_var = tk.StringVar(value=dict(biomes).get(self.cfg["catch_biome"], biomes[0][1]))
         cb = ttk.Combobox(row(tr("Где рыбачу")), textvariable=self.biome_var, values=[t for _, t in biomes],
@@ -772,6 +798,81 @@ class App:
         self.group_keys = {t: k for k, t in groups}
         gb.bind("<<ComboboxSelected>>", lambda e: self.show_group())
         self.show_group()
+
+    # ---------- отчёт об улове ----------
+    def catch_rows(self):
+        """[(название, сколько, где ловится)] пойманного (по надписям о подборе), по убыванию."""
+        f, c, ru = self.fisher, self.catch_data, i18n.LANG == "ru"
+        rows = []
+        for item_id, n in sorted(f.caught.items(), key=lambda kv: -kv[1]):
+            it = c.items.get(item_id, {"ru": str(item_id), "en": str(item_id)})
+            where = ", ".join((c.group[k]["ru"] if ru else c.group[k]["en"]) for k in c.where.get(item_id, []))
+            rows.append((it["ru"] if ru else it["en"], n, where))
+        return rows
+
+    def catch_summary(self):
+        f = self.fisher
+        known = sum(f.caught.values())
+        hours = (time.time() - f.started) / 3600.0 if f.started else 0.0
+        text = tr("Подсечек: %d · узнано: %d · не узнано: %d · пропущено сонаром: %d") % (
+            f.hooks, known, f.caught_unknown, f.skipped)
+        if hours > 0.01:
+            text += tr(" · в час: %.0f") % (f.hooks / hours)
+        return text
+
+    def show_catch_report(self):
+        win = tk.Toplevel(self.root)
+        win.title(tr("Отчёт об улове"))
+        win.configure(bg=C["bg"])
+        win.transient(self.root)
+        frame = tk.Frame(win, bg=C["panel"], padx=10, pady=10)
+        frame.pack(fill="both", expand=True, padx=8, pady=8)
+        cols = (tr("Улов"), tr("Сколько"), tr("Где ловится"))
+        tree = ttk.Treeview(frame, columns=cols, show="headings", height=12)
+        for c, w in zip(cols, (180, 70, 220)):
+            tree.heading(c, text=c)
+            tree.column(c, width=w, anchor="w" if c != cols[1] else "center")
+        tree.pack(fill="both", expand=True)
+        summary = ttk.Label(frame, style="Muted.TLabel", wraplength=470, justify="left")
+        summary.pack(anchor="w", pady=(8, 0))
+        bar = tk.Frame(win, bg=C["bg"])
+        bar.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(bar, text=tr("Закрыть"), command=win.destroy).pack(side="right")
+        ttk.Button(bar, text=tr("Сохранить CSV"), command=self.save_catch_csv).pack(side="right", padx=(0, 6))
+
+        def refresh():
+            if not win.winfo_exists():
+                return
+            tree.delete(*tree.get_children())
+            for row in self.catch_rows():
+                tree.insert("", "end", values=row)
+            if not self.fisher.caught:
+                tree.insert("", "end", values=(tr("пока ничего не узнано"), "", ""))
+            summary.config(text=self.catch_summary() + "\n" + tr(
+                "Улов узнаётся по надписи о подборе над персонажем после каждой подсечки."))
+            win.after(2000, refresh)
+        refresh()
+        self.catch_win = win
+
+    def save_catch_csv(self):
+        import csv
+        path = os.path.join(af.HERE, time.strftime("catch_%Y%m%d_%H%M%S.csv"))
+        try:
+            with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+                w = csv.writer(fh, delimiter=";")
+                w.writerow([tr("Улов"), tr("Сколько"), tr("Где ловится")])
+                for row in self.catch_rows():
+                    w.writerow(row)
+                w.writerow([])
+                w.writerow([self.catch_summary()])
+        except Exception as e:
+            self.add_log(tr("Не удалось сохранить отчёт об улове: %r") % e, "bad")
+            return
+        self.add_log(tr("Отчёт об улове сохранён: %s") % path, "good")
+        try:
+            subprocess.Popen(["explorer", "/select,", path])
+        except Exception:
+            pass
 
     def group_want(self, key):
         want = self.cfg.get("catch_want") or {}
@@ -808,26 +909,24 @@ class App:
         self.save_group(self.group_keys[self.group_var.get()])
 
     def build_away(self, p):
-        """Вкладка «Без присмотра»: защита персонажа, наживка, когда закончить рыбалку."""
+        """Вкладка «Без присмотра»: защита персонажа, когда закончить рыбалку."""
         box = self.card(p, fill="both", expand=True)
 
-        def check(key, text):
+        def check(parent, key, text, **pack):
             var = tk.BooleanVar(value=bool(self.cfg[key]))
-            ttk.Checkbutton(box, text=text, variable=var,
-                            command=lambda: self.set_auto_opt(key, var.get())).pack(anchor="w")
+            ttk.Checkbutton(parent, text=text, variable=var,
+                            command=lambda: self.set_auto_opt(key, var.get())).pack(anchor="w", **pack)
 
-        def note(text):
-            ttk.Label(box, text=text, style="Muted.TLabel", wraplength=390, justify="left").pack(
-                anchor="w", padx=(22, 0))
+        def head(text):
+            ttk.Label(box, text=text, style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
 
-        ttk.Label(box, text=tr("Защита"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
-        check("health_guard", tr("Персонаж получает урон — вытащить поплавок и встать на паузу"))
-        note(tr("Смотрит на сердечки здоровья справа вверху: стало меньше — сообщит и остановится."))
-        check("bait_watch", tr("Следить за наживкой"))
-        note(tr("Меньше 10 — предупредит, кончилась — сразу остановится (без повторных попыток)."))
-        ttk.Separator(box).pack(fill="x", pady=8)
+        head(tr("Защита"))
+        check(box, "health_guard", tr("Персонаж получает урон — вытащить поплавок и встать на паузу"))
+        check(box, "bait_watch", tr("Наживка: мало — предупредить, кончилась — остановиться"))
+        check(box, "inv_full_stop", tr("Улов перестал подбираться (инвентарь полон) — остановиться"))
+        ttk.Separator(box).pack(fill="x", pady=6)
 
-        ttk.Label(box, text=tr("Когда закончить"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
+        head(tr("Когда закончить"))
 
         def spin(key, text, top):
             row = ttk.Frame(box, style="Card.TFrame")
@@ -847,17 +946,14 @@ class App:
             sp.pack(side="right")
             sp.bind("<FocusOut>", save)
             sp.bind("<Return>", save)
-        spin("stop_after_min", tr("Остановиться через, мин"), 1440)
-        spin("stop_after_hooks", tr("…или после стольких подсечек"), 100000)
-        note(tr("0 — не останавливаться. Время и подсечки — как в статистике на вкладке «Рыбалка»."))
-        check("shutdown_after", tr("После такой остановки выключить компьютер"))
-        note(tr("Через 60 с после остановки; отменить можно кнопкой ниже."))
+        spin("stop_after_min", tr("Остановиться через, мин (0 — нет)"), 1440)
+        spin("stop_after_hooks", tr("…или после стольких подсечек (0 — нет)"), 100000)
         row = ttk.Frame(box, style="Card.TFrame")
-        row.pack(fill="x", pady=(8, 0))
+        row.pack(fill="x", pady=(2, 0))
+        check(row, "shutdown_after", tr("Потом выключить компьютер (через 60 с)"), side="left")
         self.cancel_btn = ttk.Button(row, text=tr("Отменить выключение"), command=self.cancel_shutdown)
-        self.cancel_btn.pack(side="left")
+        self.cancel_btn.pack(side="right")
         self.cancel_btn.state(["disabled"])
-
     def cancel_shutdown(self):
         try:
             af.cancel_shutdown()
@@ -1157,6 +1253,10 @@ class App:
             if d["seconds"] and self.cfg["toasts"]:
                 toast(tr("Выключение компьютера"),
                       tr("Рыбалка закончена. Компьютер выключится через %d с.") % d["seconds"])
+        elif kind == "tray":
+            self.on_tray(d["cmd"])
+        elif kind == "update":
+            self.on_update(d)
         elif kind == "hb_test":
             self.show_hb(d["text"])
         elif kind == "buff_test":
@@ -1199,6 +1299,8 @@ class App:
 
     def set_state(self, state, title, hint):
         self.state = state
+        if self.tray is not None:
+            self.tray.set_tip("%s — %s" % (APP, title))
         color = STATE_COLOR.get(state, C["muted"])
         self.dot.delete("all")
         self.dot.create_oval(2, 2, 16, 16, fill=color, width=0)
@@ -1256,6 +1358,47 @@ class App:
         t.see("end")
         t.config(state="disabled")
 
+    # ---------- обновления ----------
+    def check_updates(self, force=False):
+        """Раз в сутки (или по кнопке) — нет ли на GitHub версии новее. Читает только публичные
+        сведения о последнем релизе."""
+        if self.selftest or (not force and time.time() - float(self.cfg.get("update_checked") or 0) < 86400):
+            return
+
+        def work():
+            import updates
+            try:
+                found = updates.newer(VERSION)
+            except Exception as e:
+                self.q.put(("update", {"error": repr(e), "force": force}))
+                return
+            self.q.put(("update", {"found": found, "force": force}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_update(self, d):
+        self.cfg["update_checked"] = time.time()
+        save_cfg(self.cfg)
+        if d.get("error"):
+            if d["force"]:
+                self.add_log(tr("Не удалось проверить обновления: %s") % d["error"], "bad")
+            return
+        found = d.get("found")
+        if not found:
+            if d["force"]:
+                self.add_log(tr("У вас последняя версия (%s).") % VERSION, "good")
+            return
+        version, url = found
+        self.update_url = url
+        self.root.title("%s %s — %s" % (APP, VERSION, tr("доступна %s") % version))
+        self.add_log(tr("Вышла новая версия %s — %s") % (version, url), "good")
+        if self.cfg["toasts"]:
+            toast(APP, tr("Вышла новая версия %s. Скачать — на странице релиза на GitHub.") % version)
+        if d["force"]:
+            try:
+                os.startfile(url)
+            except Exception:
+                pass
+
     # ---------- журнал в файл и отчёт ----------
     def write_log_file(self, text, kind="info"):
         """Журнал пишется и в файл logs/autofish_ГГГГ-ММ-ДД.log рядом с программой."""
@@ -1300,10 +1443,10 @@ class App:
             with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
                 for f in newest(LOG_DIR, 3, (".log",)):
                     z.write(f, "logs/" + os.path.basename(f))
-                for name in ("settings.json", "gear.json"):
-                    f = os.path.join(CFG_DIR, name)
-                    if os.path.exists(f):
-                        z.write(f, "settings/" + name)
+                z.writestr("settings/settings.json", json.dumps(self.cfg, ensure_ascii=False, indent=2))
+                f = os.path.join(CFG_DIR, "gear.json")
+                if os.path.exists(f):
+                    z.write(f, "settings/gear.json")
                 for sub, n in (("debug", 40), ("record", 40), ("hotbar", 20)):
                     for f in newest(os.path.join(af.HERE, sub), n):
                         z.write(f, sub + "/" + os.path.basename(f))
@@ -1333,8 +1476,63 @@ class App:
         lines.append("settings=" + json.dumps(self.cfg, ensure_ascii=False))
         return "\n".join(lines) + "\n"
 
+    # ---------- мастер первого запуска ----------
+    def show_wizard(self):
+        import wizard
+        if getattr(self, "wizard", None) is not None and self.wizard.winfo_exists():
+            self.wizard.lift()
+            return
+
+        def done():
+            self.cfg["wizard_done"] = True
+            save_cfg(self.cfg)
+            self.wizard = None
+        self.wizard = wizard.Wizard(self.root, C, FONT, self.cfg["hotkey"].upper(), self.cfg["reset_key"].upper(), done)
+
+    # ---------- значок в трее ----------
+    def start_tray(self):
+        """Значок в трее: клик — показать/спрятать окно, меню — пауза и выход. Свёрнутое окно
+        прячется в трей."""
+        try:
+            import tray
+            ico = os.path.join(CFG_DIR, "tray.ico")
+            if not os.path.exists(ico):
+                os.makedirs(CFG_DIR, exist_ok=True)
+                write_ico(ico, sizes=(16, 32, 48))
+            menu = [("show", tr("Показать окно")), ("toggle", tr("Пауза / продолжить")), ("help", tr("Как начать")),
+                    None, ("quit", tr("Выход"))]
+            self.tray = tray.Tray(APP, ico, menu, lambda c: self.q.put(("tray", {"cmd": c})))
+            if not self.tray.start():
+                self.tray = None
+                return
+            self.root.bind("<Unmap>", self.on_unmap)
+        except Exception:
+            self.tray = None
+
+    def on_unmap(self, event):
+        if event.widget is self.root and self.tray is not None and self.root.state() == "iconic":
+            self.root.withdraw()                  # свернули — в трей
+
+    def on_tray(self, cmd):
+        if cmd in ("click", "show"):
+            if cmd == "click" and self.root.state() == "normal":
+                self.root.withdraw()
+            else:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+        elif cmd == "toggle":
+            self.fisher.on_toggle()
+        elif cmd == "help":
+            self.root.deiconify()
+            self.show_wizard()
+        elif cmd == "quit":
+            self.close()
+
     def close(self):
         self.cfg["win_pos"] = [self.root.winfo_x(), self.root.winfo_y()]
+        if self.tray is not None:
+            self.tray.stop()
         self.fisher.shutdown()
         if not self.selftest:                     # самопроверка не трогает настройки игрока
             save_cfg(self.cfg)

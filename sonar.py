@@ -38,6 +38,7 @@ class TextReader:
         self.base = None                 # снимок места надписи, пока её нет
         self.reg = None                  # где на экране (для grab)
         self.last_img = None             # что подали в OCR (для отладочных картинок)
+        self.present = False             # была ли надпись при последнем чтении
 
     def set_base(self, frame):
         self.base = frame.copy()
@@ -76,16 +77,20 @@ class TextReader:
             return None
         return y0, y1 + 1, x0, x1
 
-    def read_all(self, frame, exclude=None, langs=("ru", "en-US")):
-        """Все прочтения надписи (разные варианты подготовки и языки) — пустой список, если надписи нет."""
-        import ocr
+    def extract(self, frame, exclude=None):
+        """Маска букв появившейся надписи (обрезанная по строке) или None, если надписи нет."""
         mask = self.text_mask(frame, exclude)
         box = self.crop(mask)
         self.last_img = None
+        self.present = box is not None            # надпись вообще появилась (даже если не прочитана)
         if box is None:
-            return []
+            return None
         y0, y1, x0, x1 = box
-        m = mask[y0:y1, x0:x1]
+        return mask[y0:y1, x0:x1]
+
+    def ocr(self, m, langs=("ru", "en-US")):
+        """Все прочтения маски букв OCR (разные варианты подготовки и языки)."""
+        import ocr
         texts = []
         for scale, thick, blur in VARIANTS:
             img = prepare(m, scale, thick, blur)
@@ -96,6 +101,13 @@ class TextReader:
                 if t and t not in texts:
                     texts.append(t)
         return texts
+
+    def read_all(self, frame, exclude=None, langs=("ru", "en-US"), read=True):
+        """Все прочтения надписи — пустой список, если надписи нет."""
+        m = self.extract(frame, exclude)
+        if m is None or not read:
+            return []
+        return self.ocr(m, langs)
 
     def read(self, frame, exclude=None, langs=("ru", "en-US")):
         """Первое прочтение надписи или ""."""
