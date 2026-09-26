@@ -78,6 +78,7 @@ class FakeGame:
         self.empty = False                           # «кончилась наживка»: поплавка не видно
         self.night = night
         self.decoy = False
+        self.bite_text = None                        # надпись сонара при поклёвке: (текст, цвет BGR)
         self.selected = selected
         self.clicks, self.keys, self.used = [], [], []
         self.cursor = (self.BX, self.OFF)
@@ -97,6 +98,9 @@ class FakeGame:
             cx, cy = ((self.BX, self.BY) if fly > 0.8 else
                       (int(self.BX - 40 * (0.8 - fly)), int(self.BY - 30 * (0.8 - fly))))
             s[cy - 16:cy + 16, cx - 17:cx + 17] = self.patch
+        if self.out and self.empty and self.bite_text:   # клюнуло — над поплавком название (сонар)
+            import textimg
+            s = textimg.put_text(s, self.bite_text[0], self.bite_text[1], self.BX - 60, self.BY - 55)
         if self.night:
             s = s * 0.3 + np.array([30, 28, 26], np.float32)
         return s

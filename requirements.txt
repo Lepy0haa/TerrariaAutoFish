@@ -1,3 +1,11 @@
 mss>=9.0
 numpy>=1.26
 pynput>=1.8
+# распознавание текста Windows (надпись зелья сонара)
+winrt-runtime>=3.2
+winrt-Windows.Media.Ocr>=3.2
+winrt-Windows.Graphics.Imaging>=3.2
+winrt-Windows.Storage.Streams>=3.2
+winrt-Windows.Globalization>=3.2
+winrt-Windows.Foundation>=3.2
+winrt-Windows.Foundation.Collections>=3.2

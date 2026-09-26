@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.8"
+VERSION = "1.3.0"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -42,6 +42,7 @@ DEFAULTS = {
     "auto_rod": True, "auto_mark": True, "rod_slot": "auto",
     "buff_sonar": False, "buff_calm": False, "health_guard": True, "bait_watch": True,
     "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
+    "sonar_filter": False, "catch_biome": "auto", "catch_want": {},
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -295,6 +296,7 @@ class App:
         self.log_lines = []               # (время, текст, тип) — чтобы пересоздать журнал при смене языка
         self.gear = {"rod_slot": None, "manual": False, "bobber": None}
         self.bait = None                  # сколько цифр наживки видно на удочке
+        self.catch_info = None            # последнее, что прочитал сонар
         self.calib = {"ratio": af.SINK_RATIO, "casts": 0, "auto": af.AUTO_CALIB}
         self.fisher = None
 
@@ -343,7 +345,10 @@ class App:
             self.root.after(3800, lambda: self.snapshot(selftest.replace(".png", "_auto.png"),
                                                         close=False, overlay=False))
             self.root.after(4000, lambda: self.nb.select(3))
-            self.root.after(4400, lambda: self.snapshot(selftest.replace(".png", "_away.png"), overlay=False))
+            self.root.after(4400, lambda: self.snapshot(selftest.replace(".png", "_away.png"),
+                                                        close=False, overlay=False))
+            self.root.after(4600, lambda: self.nb.select(4))
+            self.root.after(5000, lambda: self.snapshot(selftest.replace(".png", "_catch.png"), overlay=False))
 
     def place_window(self):
         """Открыть окно там, где его оставили, но не за краем экрана."""
@@ -383,6 +388,9 @@ class App:
         af.STOP_AFTER_MIN = int(self.cfg["stop_after_min"])
         af.STOP_AFTER_HOOKS = int(self.cfg["stop_after_hooks"])
         af.SHUTDOWN_AFTER = bool(self.cfg["shutdown_after"])
+        af.SONAR_FILTER = bool(self.cfg["sonar_filter"])
+        af.CATCH_BIOME = self.cfg["catch_biome"]
+        af.CATCH_WANT = {k: set(v) for k, v in (self.cfg["catch_want"] or {}).items()}
         af.BUFF_KEY = self.cfg["buff_key"]
         af.BUFF_METHOD = self.cfg["buff_method"]
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
@@ -459,10 +467,13 @@ class App:
         nb.add(auto, text=tr(" Автоматика "))
         away = ttk.Frame(nb, padding=(0, 6, 0, 0))
         nb.add(away, text=tr(" Без присмотра "))
+        catch = ttk.Frame(nb, padding=(0, 6, 0, 0))
+        nb.add(catch, text=tr(" Улов "))
         self.build_main(main)
         self.build_settings(sett)
         self.build_auto(auto)
         self.build_away(away)
+        self.build_catch(catch)
 
     def build_main(self, p):
         top = ttk.Frame(p)
@@ -704,6 +715,98 @@ class App:
         return tr("Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет. "
                   "Держите в инвентаре только нужные зелья.")
 
+    def build_catch(self, p):
+        """Вкладка «Улов»: что ловить в каждом биоме (по надписи зелья сонара)."""
+        box = self.card(p, fill="both", expand=True)
+        try:
+            import catches
+            self.catch_data = catches.Catches(os.path.join(af.ASSET_DIR, "fishing", "catches.json"))
+        except Exception:
+            self.catch_data = None
+            ttk.Label(box, text=tr("Нет данных об улове."), style="Card.TLabel").pack(anchor="w")
+            return
+        c, ru = self.catch_data, i18n.LANG == "ru"
+        var = tk.BooleanVar(value=bool(self.cfg["sonar_filter"]))
+        ttk.Checkbutton(box, text=tr("Выбирать улов по зелью сонара"), variable=var,
+                        command=lambda: self.set_auto_opt("sonar_filter", var.get())).pack(anchor="w")
+        ttk.Label(box, text=tr("Зелье сонара пишет над поплавком, что клюнуло. Программа читает надпись и "
+                               "подсекает только отмеченное, остальное пропускает. Не прочитала — подсекает."),
+                  style="Muted.TLabel", wraplength=390, justify="left").pack(anchor="w", padx=(22, 0))
+
+        def row(text):
+            r = ttk.Frame(box, style="Card.TFrame")
+            r.pack(fill="x", pady=(6, 0))
+            ttk.Label(r, text=text, style="Card.TLabel", width=12).pack(side="left")
+            return r
+        biomes = [("auto", tr("Авто (по тому, что клюёт)"))] + [(g["key"], g["ru"] if ru else g["en"])
+                                                                 for g in c.biomes()]
+        self.biome_var = tk.StringVar(value=dict(biomes).get(self.cfg["catch_biome"], biomes[0][1]))
+        cb = ttk.Combobox(row(tr("Где рыбачу")), textvariable=self.biome_var, values=[t for _, t in biomes],
+                          state="readonly", width=30)
+        cb.pack(side="left")
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt(
+            "catch_biome", {t: k for k, t in biomes}[self.biome_var.get()]))
+
+        groups = [(g["key"], g["ru"] if ru else g["en"]) for g in c.groups]
+        r = row(tr("Список"))
+        self.group_var = tk.StringVar(value=groups[0][1])
+        gb = ttk.Combobox(r, textvariable=self.group_var, values=[t for _, t in groups], state="readonly", width=22)
+        gb.pack(side="left")
+        ttk.Button(r, text=tr("Ничего"), command=lambda: self.set_group_all(False)).pack(side="right")
+        ttk.Button(r, text=tr("Всё"), command=lambda: self.set_group_all(True)).pack(side="right", padx=(0, 4))
+
+        # список предметов выбранной группы: две колонки, с прокруткой
+        wrap = ttk.Frame(box, style="Card.TFrame")
+        wrap.pack(fill="both", expand=True, pady=(6, 0))
+        canvas = tk.Canvas(wrap, bg=C["panel"], highlightthickness=0, height=200)
+        sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
+        self.catch_list = ttk.Frame(canvas, style="Card.TFrame")
+        self.catch_list.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=self.catch_list, anchor="nw")
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units")
+                        if str(e.widget).startswith(str(canvas)) else None)
+        self.catch_canvas = canvas
+        self.group_keys = {t: k for k, t in groups}
+        gb.bind("<<ComboboxSelected>>", lambda e: self.show_group())
+        self.show_group()
+
+    def group_want(self, key):
+        want = self.cfg.get("catch_want") or {}
+        if key in want:
+            return set(want[key])
+        return {it["id"] for it in self.catch_data.group[key]["items"]}      # не настроено — ловим всё
+
+    def show_group(self):
+        for w in self.catch_list.winfo_children():
+            w.destroy()
+        key = self.group_keys[self.group_var.get()]
+        want = self.group_want(key)
+        ru = i18n.LANG == "ru"
+        self.catch_vars = {}
+        for n, it in enumerate(self.catch_data.group[key]["items"]):
+            var = tk.BooleanVar(value=it["id"] in want)
+            text = it["ru"] if ru else it["en"]
+            if it.get("hardmode"):
+                text += tr(" (хардмод)")
+            ttk.Checkbutton(self.catch_list, text=text, variable=var,
+                            command=lambda k=key: self.save_group(k)).grid(
+                row=n // 2, column=n % 2, sticky="w", padx=(0, 10))
+            self.catch_vars[it["id"]] = var
+        self.catch_canvas.yview_moveto(0)
+
+    def save_group(self, key):
+        want = dict(self.cfg.get("catch_want") or {})
+        want[key] = sorted(i for i, v in self.catch_vars.items() if v.get())
+        self.set_auto_opt("catch_want", want)
+
+    def set_group_all(self, on):
+        for v in self.catch_vars.values():
+            v.set(on)
+        self.save_group(self.group_keys[self.group_var.get()])
+
     def build_away(self, p):
         """Вкладка «Без присмотра»: защита персонажа, наживка, когда закончить рыбалку."""
         box = self.card(p, fill="both", expand=True)
@@ -787,6 +890,12 @@ class App:
                          (tr(" (задан)") if d.get("manual") else ""))
         if d.get("bobber"):
             parts.append(tr("поплавок: %s") % d["bobber"])
+        if self.catch_info and self.cfg["sonar_filter"] and self.catch_data:
+            b = self.catch_info.get("biome")
+            if b:
+                g = self.catch_data.group[b]
+                parts.append(tr("биом: %s") % (g["ru"] if i18n.LANG == "ru" else g["en"]) +
+                             (tr(" (авто)") if self.cfg["catch_biome"] == "auto" else ""))
         if self.bait is not None and self.cfg["bait_watch"]:
             parts.append(tr("наживка: %s") % {0: tr("нет"), 1: tr("меньше 10"), 2: "10–99"}.get(self.bait, "100+"))
         self.gear_lbl.config(text=" · ".join(parts))
@@ -1037,6 +1146,9 @@ class App:
             self.show_buffs(d["status"])
         elif kind == "gear":
             self.show_gear(d)
+        elif kind == "catch":
+            self.catch_info = d
+            self.show_gear(self.gear)
         elif kind == "bait":
             self.bait = d["digits"]
             self.show_gear(self.gear)
@@ -1107,8 +1219,12 @@ class App:
         s = self.stats
         self.stat_lbls["hooks"].config(text=str(s["hooks"]))
         self.stat_lbls["casts"].config(text=str(s["casts"]))
-        self.fails_lbl.config(text=(tr("Неудачных забросов подряд: %d из %d") % (s["fails"], af.MAX_FAILS))
-                              if s["fails"] else "")
+        parts = []
+        if s["fails"]:
+            parts.append(tr("Неудачных забросов подряд: %d из %d") % (s["fails"], af.MAX_FAILS))
+        if s.get("skipped"):
+            parts.append(tr("Пропущено по сонару: %d") % s["skipped"])
+        self.fails_lbl.config(text=" · ".join(parts))
         if self.overlay:
             self.overlay.count.config(text=tr("Подсечек: %d") % s["hooks"])
         self.tick(reschedule=False)
@@ -1309,6 +1425,10 @@ def main():
                 VERSION, f.buffs is not None, sorted(f.buffs.icons) if f.buffs else [],
                 len(f.rods.rods.sprites) if f.rods else 0,
                 len(f.bobber_sprites.sprites) if f.bobber_sprites else 0, PORTABLE))
+            import ocr
+            out.write("potions=%d catches=%d ocr=%s\n" % (
+                len(f.potions.rgba) if f.potions else 0, len(f.catches.items) if f.catches else 0,
+                ",".join(ocr.available_languages()) or "нет"))
         return
     if args[:1] == ["--make-icon"]:
         write_ico(args[1])

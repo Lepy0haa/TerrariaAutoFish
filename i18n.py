@@ -310,6 +310,25 @@ EN = {
         "The character is taking damage (%d%% less health) — reeled in and paused.",
     "персонаж получает урон": "the character is taking damage",
     "Наживка": "Bait",
+    # улов по сонару
+    " Улов ": " Catch ",
+    " (хардмод)": " (hardmode)",
+    "Авто (по тому, что клюёт)": "Auto (by what bites)",
+    "Всё": "All",
+    "Ничего": "None",
+    "Выбирать улов по зелью сонара": "Choose the catch using the Sonar Potion",
+    "Где рыбачу": "Fishing in",
+    "Список": "List",
+    "Зелье сонара пишет над поплавком, что клюнуло. Программа читает надпись и подсекает только отмеченное, остальное пропускает. Не прочитала — подсекает.":
+        "The Sonar Potion shows above the bobber what is biting. The program reads it and hooks only what is "
+        "checked, skipping the rest. If it can't read it — it hooks.",
+    "Нет данных об улове.": "No catch data.",
+    "Пропущено по сонару: %d": "Skipped by sonar: %d",
+    "Распознавание текста Windows недоступно — выбор улова по сонару не работает.":
+        "Windows text recognition is not available — choosing the catch by sonar doesn't work.",
+    "Сонар: «%s» — не узнал предмет, подсекаю.": "Sonar: «%s» — unknown item, hooking.",
+    "Сонар: клюёт «%s» — не отмечено, пропускаю.": "Sonar: «%s» is biting — not checked, skipping.",
+    "биом: %s": "biome: %s",
     # зелья из хотбара
     "%s — слот %d": "%s — slot %d",
     "Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет. Держите в инвентаре только нужные зелья.":

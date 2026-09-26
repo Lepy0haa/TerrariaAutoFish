@@ -1,0 +1,2008 @@
+{
+ "source": "https://terraria.wiki.gg/wiki/Fishing_catches",
+ "groups": [
+  {
+   "key": "forest",
+   "en": "Pure biome",
+   "ru": "Лес (обычный биом)",
+   "items": [
+    {
+     "id": 2455,
+     "en": "Dirtfish",
+     "ru": "Землерыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface",
+      "Underground"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2479,
+     "en": "Bunnyfish",
+     "ru": "Рыба-кролик",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2456,
+     "en": "Dynamite Fish",
+     "ru": "Рыба-динамит",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2474,
+     "en": "Zombie Fish",
+     "ru": "Рыба-зомби",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2437,
+     "en": "Green Jellyfish",
+     "ru": "Зелёная медуза",
+     "quality": "Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2436,
+     "en": "Blue Jellyfish",
+     "ru": "Голубая медуза",
+     "quality": "Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2308,
+     "en": "Golden Carp",
+     "ru": "Золотой карп",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2320,
+     "en": "Rockfish",
+     "ru": "Рыба-камень",
+     "quality": "Very Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2321,
+     "en": "Stinkfish",
+     "ru": "Рыба-вонючка",
+     "quality": "Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2478,
+     "en": "Bonefish",
+     "ru": "Костяная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2450,
+     "en": "Batfish",
+     "ru": "Летучая мышь-рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2464,
+     "en": "Jewelfish",
+     "ru": "Драгоценная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2469,
+     "en": "Spiderfish",
+     "ru": "Рыба-паук",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2462,
+     "en": "Hungerfish",
+     "ru": "Голодная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2482,
+     "en": "Demonic Hellfish",
+     "ru": "Демоническая рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2472,
+     "en": "Guide Voodoo Fish",
+     "ru": "Рыба вуду гида",
+     "quality": "Uncommon",
+     "heights": [
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2460,
+     "en": "Fishotron",
+     "ru": "Рыботрон",
+     "quality": "Uncommon",
+     "heights": [
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2303,
+     "en": "Armored Cavefish",
+     "ru": "Панцирная слепоглазка",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2309,
+     "en": "Specular Fish",
+     "ru": "Зеркальная рыба",
+     "quality": "Common or Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2487,
+     "en": "Slimefish",
+     "ru": "Рыба-слизень",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2298,
+     "en": "Salmon",
+     "ru": "Лосось",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2290,
+     "en": "Bass",
+     "ru": "Окунь",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "ocean",
+   "en": "Ocean",
+   "ru": "Океан",
+   "items": [
+    {
+     "id": 5002,
+     "en": "Ocean Crate",
+     "ru": "Океанический ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 5003,
+     "en": "Seaside Crate",
+     "ru": "Прибрежный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2341,
+     "en": "Reaver Shark",
+     "ru": "Акула-расхититель",
+     "quality": "Very Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2342,
+     "en": "Sawtooth Shark",
+     "ru": "Пилозубая акула",
+     "quality": "Very Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2438,
+     "en": "Pink Jellyfish",
+     "ru": "Розовая медуза",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2332,
+     "en": "Swordfish",
+     "ru": "Меч-рыба",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2480,
+     "en": "Cap'n Tunabeard",
+     "ru": "Капитан Тунцовая Борода",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2481,
+     "en": "Clownfish",
+     "ru": "Рыба-клоун",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2316,
+     "en": "Shrimp",
+     "ru": "Креветка",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2301,
+     "en": "Red Snapper",
+     "ru": "Красный луциан",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2300,
+     "en": "Tuna",
+     "ru": "Тунец",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2297,
+     "en": "Trout",
+     "ru": "Форель",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "jungle",
+   "en": "Jungle",
+   "ru": "Джунгли",
+   "items": [
+    {
+     "id": 3208,
+     "en": "Jungle Crate",
+     "ru": "Ящик джунглей",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3987,
+     "en": "Bramble Crate",
+     "ru": "Терновый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 5463,
+     "en": "Barnacle Staff",
+     "ru": "Посох прилипалы",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 5634,
+     "en": "It's Scragglin' Time",
+     "ru": "Настало время хаоса",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2452,
+     "en": "Catfish",
+     "ru": "Рыбокот",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2483,
+     "en": "Derpfish",
+     "ru": "Рыба-крикун",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2488,
+     "en": "Tropical Barracuda",
+     "ru": "Тропическая барракуда",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2486,
+     "en": "Mudfish",
+     "ru": "Грязерыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface",
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2313,
+     "en": "Double Cod",
+     "ru": "Двойная треска",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2311,
+     "en": "Variegated Lardfish",
+     "ru": "Сальная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2302,
+     "en": "Neon Tetra",
+     "ru": "Голубой неон",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "snow",
+   "en": "Snow",
+   "ru": "Снега",
+   "items": [
+    {
+     "id": 4405,
+     "en": "Frozen Crate",
+     "ru": "Замороженный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4406,
+     "en": "Boreal Crate",
+     "ru": "Заледеневший ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2467,
+     "en": "Pengfish",
+     "ru": "Рыба-пингвин",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2470,
+     "en": "Tundra Trout",
+     "ru": "Тундровая форель",
+     "quality": "Uncommon",
+     "heights": [
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2484,
+     "en": "Fishron",
+     "ru": "Рыбокрыл",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2466,
+     "en": "Mutant Flinxfin",
+     "ru": "Флинксопёрка-мутант",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 3197,
+     "en": "Frost Daggerfish",
+     "ru": "Морозная рыба-кинжал",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2306,
+     "en": "Frost Minnow",
+     "ru": "Морозный гольян",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2299,
+     "en": "Atlantic Cod",
+     "ru": "Атлантическая треска",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2309,
+     "en": "Specular Fish",
+     "ru": "Зеркальная рыба",
+     "quality": "Plentiful",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "desert",
+   "en": "Desert",
+   "ru": "Пустыня",
+   "items": [
+    {
+     "id": 4407,
+     "en": "Oasis Crate",
+     "ru": "Оазисный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4408,
+     "en": "Mirage Crate",
+     "ru": "Миражный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 5490,
+     "en": "Brasilian Skies",
+     "ru": "Теперь это канон",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4393,
+     "en": "Scarab Fish",
+     "ru": "Рыба-скарабей",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 4394,
+     "en": "Scorpio Fish",
+     "ru": "Рыба-скорпион",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 4410,
+     "en": "Oyster",
+     "ru": "Устрица",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4402,
+     "en": "Rock Lobster",
+     "ru": "Скалистый лобстер",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4401,
+     "en": "Flounder",
+     "ru": "Камбала",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "corruption",
+   "en": "Corruption",
+   "ru": "Порча",
+   "items": [
+    {
+     "id": 3203,
+     "en": "Corrupt Crate",
+     "ru": "Порченый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3982,
+     "en": "Defiled Crate",
+     "ru": "Осквернённый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2429,
+     "en": "Scaly Truffle",
+     "ru": "Чешуйчатый трюфель",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Cavern"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 3210,
+     "en": "Toxikarp",
+     "ru": "Токсикарп",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2330,
+     "en": "Purple Clubberfish",
+     "ru": "Пурпурная рыба-дубина",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2454,
+     "en": "Cursedfish",
+     "ru": "Проклятая рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2485,
+     "en": "Infected Scabbardfish",
+     "ru": "Заражённая рыба-сабля",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2457,
+     "en": "Eater of Plankton",
+     "ru": "Пожиратель планктона",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2318,
+     "en": "Ebonkoi",
+     "ru": "Чёрный карп",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "crimson",
+   "en": "Crimson",
+   "ru": "Багрянец",
+   "items": [
+    {
+     "id": 3204,
+     "en": "Crimson Crate",
+     "ru": "Багровый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3983,
+     "en": "Hematic Crate",
+     "ru": "Кровяной ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2429,
+     "en": "Scaly Truffle",
+     "ru": "Чешуйчатый трюфель",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Cavern"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 3211,
+     "en": "Bladetongue",
+     "ru": "«Острый язычок»",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2477,
+     "en": "Bloody Manowar",
+     "ru": "Кровавый кораблик",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2463,
+     "en": "Ichorfish",
+     "ru": "Ихорная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2319,
+     "en": "Hemopiranha",
+     "ru": "Кровавая пиранья",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2305,
+     "en": "Crimson Tigerfish",
+     "ru": "Багровая тигрорыба",
+     "quality": "Common",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "hallow",
+   "en": "Hallow",
+   "ru": "Святые земли",
+   "items": [
+    {
+     "id": 3207,
+     "en": "Hallowed Crate",
+     "ru": "Освящённый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3986,
+     "en": "Divine Crate",
+     "ru": "Божественный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2429,
+     "en": "Scaly Truffle",
+     "ru": "Чешуйчатый трюфель",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Cavern"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 3209,
+     "en": "Crystal Serpent",
+     "ru": "Кристальный змей",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 5274,
+     "en": "Lady Of The Lake",
+     "ru": "«Владычица Озера»",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2317,
+     "en": "Chaos Fish",
+     "ru": "Рыба-хаос",
+     "quality": "Very Rare",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2465,
+     "en": "Mirage Fish",
+     "ru": "Рыба-мираж",
+     "quality": "Uncommon",
+     "heights": [
+      "Underground",
+      "Cavern",
+      "Underworld"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2468,
+     "en": "Pixiefish",
+     "ru": "Рыба-пикси",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2310,
+     "en": "Prismite",
+     "ru": "Призмит",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2471,
+     "en": "Unicorn Fish",
+     "ru": "Рыба-единорог",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2307,
+     "en": "Princess Fish",
+     "ru": "Рыба-принцесса",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "hallowed_desert",
+   "en": "Hallowed Desert",
+   "ru": "Святая пустыня",
+   "items": [
+    {
+     "id": 5490,
+     "en": "Brasilian Skies",
+     "ru": "Теперь это канон",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4393,
+     "en": "Scarab Fish",
+     "ru": "Рыба-скарабей",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 4394,
+     "en": "Scorpio Fish",
+     "ru": "Рыба-скорпион",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 4410,
+     "en": "Oyster",
+     "ru": "Устрица",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4402,
+     "en": "Rock Lobster",
+     "ru": "Скалистый лобстер",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4401,
+     "en": "Flounder",
+     "ru": "Камбала",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "mushroom",
+   "en": "Glowing Mushroom biome",
+   "ru": "Светящиеся грибы",
+   "items": [
+    {
+     "id": 2475,
+     "en": "Amanita Fungifin",
+     "ru": "Мухоморопёрка",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "dungeon",
+   "en": "Dungeon",
+   "ru": "Темница",
+   "items": [
+    {
+     "id": 3205,
+     "en": "Dungeon Crate",
+     "ru": "Ящик темницы",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3984,
+     "en": "Stockade Crate",
+     "ru": "Решётчатый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3000,
+     "en": "Alchemy Table",
+     "ru": "Алхимический стол",
+     "quality": "Very Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2999,
+     "en": "Bewitching Table",
+     "ru": "Стол шамана",
+     "quality": "Very Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "space",
+   "en": "Space",
+   "ru": "Космос",
+   "items": [
+    {
+     "id": 2461,
+     "en": "Harpyfish",
+     "ru": "Рыба-гарпия",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2453,
+     "en": "Cloudfish",
+     "ru": "Облачная рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2473,
+     "en": "Wyverntail",
+     "ru": "Вивернохвост",
+     "quality": "Uncommon",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2476,
+     "en": "Angelfish",
+     "ru": "Рыба-ангел",
+     "quality": "Uncommon",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2458,
+     "en": "Fallen Starfish",
+     "ru": "Упавшая звезда-рыба",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2459,
+     "en": "The Fish of Cthulhu",
+     "ru": "Рыба Ктулху",
+     "quality": "Uncommon",
+     "heights": [
+      "Space",
+      "Surface"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    },
+    {
+     "id": 2304,
+     "en": "Damselfish",
+     "ru": "Рыба-ласточка",
+     "quality": "Uncommon",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "lava",
+   "en": "Lava",
+   "ru": "Лава",
+   "items": [
+    {
+     "id": 4877,
+     "en": "Obsidian Crate",
+     "ru": "Обсидиановый ящик",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4878,
+     "en": "Hellstone Crate",
+     "ru": "Ящик из адского камня",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4819,
+     "en": "Demon Conch",
+     "ru": "Демоническая ракушка",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4820,
+     "en": "Bottomless Lava Bucket",
+     "ru": "Бездонное ведро лавы",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 4872,
+     "en": "Lava Absorbant Sponge",
+     "ru": "Впитывающая лаву губка",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2331,
+     "en": "Obsidian Swordfish",
+     "ru": "Обсидиановая меч-рыба",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2312,
+     "en": "Flarefin Koi",
+     "ru": "Карп-огнепёрка",
+     "quality": "Very Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2315,
+     "en": "Obsidifish",
+     "ru": "Обсидиановая рыба",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "honey",
+   "en": "Honey",
+   "ru": "Мёд",
+   "items": [
+    {
+     "id": 2314,
+     "en": "Honeyfin",
+     "ru": "Медопёрка",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2451,
+     "en": "Bumblebee Tuna",
+     "ru": "Шмель-тунец",
+     "quality": "Uncommon",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": true,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "crates",
+   "en": "Crate",
+   "ru": "Ящики (везде)",
+   "items": [
+    {
+     "id": 3205,
+     "en": "Dungeon Crate",
+     "ru": "Ящик темницы",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3984,
+     "en": "Stockade Crate",
+     "ru": "Решётчатый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 5002,
+     "en": "Ocean Crate",
+     "ru": "Океанический ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 5003,
+     "en": "Seaside Crate",
+     "ru": "Прибрежный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3203,
+     "en": "Corrupt Crate",
+     "ru": "Порченый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3982,
+     "en": "Defiled Crate",
+     "ru": "Осквернённый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3204,
+     "en": "Crimson Crate",
+     "ru": "Багровый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3983,
+     "en": "Hematic Crate",
+     "ru": "Кровяной ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3207,
+     "en": "Hallowed Crate",
+     "ru": "Освящённый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3986,
+     "en": "Divine Crate",
+     "ru": "Божественный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3208,
+     "en": "Jungle Crate",
+     "ru": "Ящик джунглей",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3987,
+     "en": "Bramble Crate",
+     "ru": "Терновый ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4405,
+     "en": "Frozen Crate",
+     "ru": "Замороженный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4406,
+     "en": "Boreal Crate",
+     "ru": "Заледеневший ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4407,
+     "en": "Oasis Crate",
+     "ru": "Оазисный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 4408,
+     "en": "Mirage Crate",
+     "ru": "Миражный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3206,
+     "en": "Sky Crate",
+     "ru": "Небесный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3985,
+     "en": "Azure Crate",
+     "ru": "Лазурный ящик",
+     "quality": "Rare",
+     "heights": [
+      "Space"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2336,
+     "en": "Golden Crate",
+     "ru": "Золотой ящик",
+     "quality": "Very Rare or Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3981,
+     "en": "Titanium Crate",
+     "ru": "Титановый ящик",
+     "quality": "Very Rare or Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2335,
+     "en": "Iron Crate",
+     "ru": "Железный ящик",
+     "quality": "Uncommon or Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3980,
+     "en": "Mythril Crate",
+     "ru": "Мифриловый ящик",
+     "quality": "Uncommon or Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 2334,
+     "en": "Wooden Crate",
+     "ru": "Деревянный ящик",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": true
+    },
+    {
+     "id": 3979,
+     "en": "Pearlwood Crate",
+     "ru": "Ящик из жемчужного дерева",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": true,
+     "quest": false,
+     "crate": true
+    }
+   ]
+  },
+  {
+   "key": "rare",
+   "en": "Rare items",
+   "ru": "Редкое (везде)",
+   "items": [
+    {
+     "id": 4382,
+     "en": "Advanced Combat Techniques",
+     "ru": "«Продвинутые боевые техники»",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 5240,
+     "en": "Dread of the Red Sea",
+     "ru": "«Ужас красного моря»",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2423,
+     "en": "Frog Leg",
+     "ru": "Лягушачьи лапки",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 3225,
+     "en": "Balloon Pufferfish",
+     "ru": "Воздушный иглобрюх",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2420,
+     "en": "Zephyr Fish",
+     "ru": "Зефирная рыба",
+     "quality": "Extremely Rare",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 3196,
+     "en": "Bomb Fish",
+     "ru": "Рыба-бомба",
+     "quality": "Uncommon and Not Extremely Rare and Not Very Rare [ h ]",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  },
+  {
+   "key": "junk",
+   "en": "Junk",
+   "ru": "Мусор (везде)",
+   "items": [
+    {
+     "id": 5275,
+     "en": "Joja Cola",
+     "ru": "«Джоджа-кола»",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2337,
+     "en": "Old Shoe",
+     "ru": "Старый ботинок",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2338,
+     "en": "Seaweed",
+     "ru": "Водоросли",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    },
+    {
+     "id": 2339,
+     "en": "Tin Can",
+     "ru": "Консервная банка",
+     "quality": "Plentiful",
+     "heights": [
+      "Any"
+     ],
+     "hardmode": false,
+     "quest": false,
+     "crate": false
+    }
+   ]
+  }
+ ]
+}

@@ -14,6 +14,7 @@ memory or files, so it does not depend on the game version.
   <img src="docs/settings-en.png" width="280" alt="Settings">
   <img src="docs/automation-en.png" width="280" alt="Automation">
   <img src="docs/away-en.png" width="280" alt="Unattended">
+  <img src="docs/catch-en.png" width="280" alt="Catch">
 </p>
 
 ## Features
@@ -36,6 +37,10 @@ memory or files, so it does not depend on the game version.
   place you marked and remembers the new spot. Works at night and in caves too.
 - **Potions** — watches the Fishing, Crate, Sonar and Calm buffs and drinks potions (with Quick
   Buff) when a buff ends. Tells you when you run out of potions.
+- **Choose what to catch in every biome** — with the Sonar Potion the game writes above the bobber
+  what is biting; the program reads it (Windows text recognition) and hooks only what you checked for
+  this biome (fish, crates, rare items, junk — 128 catches from the Terraria Wiki, in Russian and
+  English), skipping the rest.
 - **Unattended fishing** — if the character takes damage, reels in and pauses; warns when bait is
   running low and stops as soon as it's gone; stops after the chosen time or number of hooks and
   can shut the computer down.
@@ -127,6 +132,19 @@ From the hotbar only the needed potion is drunk. Quick Buff drinks every buff po
 inventory whose buff is not active and never wastes a potion whose buff is still running — with it
 keep only the potions you need in the inventory. "Check buffs now" also shows which hotbar slots
 hold the potions.
+
+### Catch tab
+
+| Setting | What it does |
+|---|---|
+| Choose the catch using the Sonar Potion | When a fish bites, the Sonar Potion shows its name above the bobber. The program reads it and hooks only what is checked; otherwise it lets it go and waits for the next bite. If it can't read the name — it hooks (nothing valuable is lost) |
+| Fishing in | The biome whose list is used. **Auto** — guessed by what bites (e.g. Neon Tetra means the Jungle) |
+| List | The catches of each biome (from the Terraria Wiki, with "hardmode" marks), plus Crates, Rare items and Junk that can be caught anywhere. "All" / "None" check or clear the whole list |
+
+The name is found by the Windows 10/11 built-in text recognition (Russian and English) and matched
+with all known catch names, tolerating recognition mistakes. With "Save debug pictures" or in record
+mode every read is saved to `debug` / `record` (`…_sonar.png`) — send them if the program reads names
+wrong.
 
 ### Unattended tab
 
@@ -230,6 +248,7 @@ snapshots.
 | `app.py` | The program with a window, overlay and notifications |
 | `autofish.py` | Fishing logic: bobber search, bite detection, auto-calibration, recovery, potions; console version |
 | `buffs.py`, `pngread.py`, `assets/` | Buff recognition and the buff icons |
+| `catches.py`, `sonar.py`, `ocr.py`, `assets/fishing`, `tools/build_catches.py` | Choosing the catch by the Sonar Potion: catches of every biome (collected from the Terraria Wiki by the script), reading the name above the bobber, Windows text recognition |
 | `sprites.py`, `hotbar.py`, `assets/rods`, `assets/bobbers` | Recognition of fishing rods in the hotbar and bobbers on the water; the Wiki images |
 | `i18n.py` | Translations (Russian / English) |
 | `installer.py`, `setup_core.py` | Installer and uninstaller |

@@ -90,6 +90,10 @@ POTION_MIN_SINGLE = 0.7   # ...а в слоте без числа (зелье о
 POTION_RETRY = 60.0   # зелья нет в хотбаре — снова смотреть через столько секунд
 BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
 BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
+SONAR_FILTER = False  # выбирать улов по зелью сонара: подсекать только отмеченное в списках улова
+CATCH_WANT = {}       # что ловить: {группа (биом, "crates", "rare", "junk"): множество id}; пусто — всё
+CATCH_BIOME = "auto"  # где рыбачим: ключ биома или "auto" — угадывать по тому, что клюёт
+SONAR_SKIP_PAUSE = 1.0    # пропустили ненужный улов — столько секунд не считать поклёвкой
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
 AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
 SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
@@ -487,8 +491,10 @@ class BiteDetector:
     """Считает, сколько пикселей цвета поплавка видно в окошке. Поклёвка — когда их
     становится заметно меньше обычного (поплавок утянуло под воду)."""
 
-    def __init__(self, palette, debug=False):
-        self.palette, self.debug = palette, debug
+    def __init__(self, palette, debug=False, top=0):
+        """top — сколько верхних строк окошка не считать: поплавок при поклёвке уходит вниз, а над
+        ним появляется надпись зелья сонара — её буквы бывают цвета поплавка."""
+        self.palette, self.debug, self.top = palette, debug, top
         self.hist = deque(maxlen=400)   # (t, видно пикселей)
         self.hits = 0
         self.seen = self.ref = 0
@@ -502,14 +508,24 @@ class BiteDetector:
         self.raised = False             # порог только что подняли (для журнала)
         self.last_dbg = -1.0
 
-    def visible(self, frame):
+    def fit_top(self, frame):
+        """Не считать строки выше поплавка (по первому снимку: где начинаются его цвета, минус 3):
+        при поклёвке поплавок уходит вниз, а сверху появляется надпись сонара."""
         px = frame.reshape(-1, 1, 3)
+        hit = (np.abs(px - self.palette[None]).max(2).min(1) <= COLOR_TOL).reshape(frame.shape[:2])
+        rows = np.nonzero(hit.sum(1) >= 2)[0]
+        self.top = max(0, int(rows[0]) - 3) if len(rows) else 0
+
+    def visible(self, frame):
+        px = frame[self.top:].reshape(-1, 1, 3)
         d = np.abs(px - self.palette[None]).max(2).min(1)
         return int((d <= COLOR_TOL).sum())
 
     def feed(self, frame, t):
         """Кадр окошка слежения; t — секунд с начала слежения. Возвращает причину поклёвки или None."""
-        sky = np.median(frame[:3].reshape(-1, 3), 0)
+        # вспышка молнии меняет цвет всего кадра — смотрим на медиану всего окошка (надпись сонара
+        # над поплавком занимает малую часть и вспышкой не считается)
+        sky = np.median(frame.reshape(-1, 3), 0)
         if self.sky is None:
             self.sky = sky
         self.flash = bool(np.abs(sky - self.sky).max() > FLASH_DIFF)
@@ -567,6 +583,7 @@ class Fisher:
       buffs    {status}                       — какие баффы есть: {"fishing": True, ...}
       gear     {rod_slot, manual, bobber}     — слот удочки (0..9 или None), задан ли он вручную, вид поплавка
       bait     {digits}                       — сколько цифр в числе наживки на удочке (0 — нет наживки)
+      catch    {id, name, wanted, biome}      — сонар: что клюнуло и ловим ли
       shutdown {seconds}                      — компьютер выключится через seconds секунд (0 — отменено)
       hook     {why, waited}                  — подсечка
       notify   {title, text}                  — важное: пауза не по вашей команде, ошибка
@@ -593,6 +610,7 @@ class Fisher:
         self.watched = None
         self.calm_floors = deque(maxlen=8)  # автокалибровка: «спокойный минимум» по последним забросам
         self.hooks = self.casts = self.fails = 0
+        self.skipped = 0                   # сколько поклёвок пропустили по сонару (не нужный улов)
         self.recover_round = 0             # сколько раз подряд уже пробовали восстановиться
         self.errors = 0                    # ошибок подряд
         self.resume_on_focus = False       # продолжить, когда игрок вернётся в окно игры
@@ -613,6 +631,13 @@ class Fisher:
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
             self.rods = self.bobber_sprites = self.potions = None
+        try:                               # что ловится в каждом биоме (для выбора улова по сонару)
+            import catches
+            self.catches = catches.Catches(os.path.join(ASSET_DIR, "fishing", "catches.json"))
+        except Exception:
+            self.catches = None
+        self.recent_catch = deque(maxlen=12)   # что клевало в последнее время (id) — чтобы угадать биом
+        self.ocr_ok = None                 # доступно ли распознавание текста Windows
         self.rod_slot = None               # в каком слоте хотбара удочка (0..9) — запоминаем по удачному забросу
         self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
@@ -671,7 +696,8 @@ class Fisher:
         self.emit("state", state=state, title=title, hint=hint)
 
     def stats(self):
-        self.emit("stats", hooks=self.hooks, casts=self.casts, fails=self.fails, started=self.started)
+        self.emit("stats", hooks=self.hooks, casts=self.casts, fails=self.fails, started=self.started,
+                  skipped=self.skipped)
 
     def has_points(self):
         return self.cast_point is not None and self.bobber is not None
@@ -1703,6 +1729,8 @@ class Fisher:
                 det = BiteDetector(palette, debug=self.debug)
                 base = det.visible(first) if len(palette) else 0
         det.ratio = self.sink_ratio()
+        if len(det.palette):
+            det.fit_top(first)                        # небо над поплавком не считаем (надпись сонара)
         if base < self.min_bobber_px:
             self.fail(tr("Поплавок почти не виден (%d пикс.).") % base)
             return
@@ -1724,6 +1752,8 @@ class Fisher:
         max_wait = 120.0 if self.record else MAX_WAIT
         start = last_live = time.perf_counter()
         live_min = None                 # самое малое «видно» между обновлениями полоски
+        rd = self.sonar_reader(sct, cl, pos)       # надпись зелья сонара (или None)
+        last_base, ignore_until = start, 0.0
         while True:
             if self.stopped():
                 return
@@ -1753,6 +1783,12 @@ class Fisher:
             frame = grab(sct, watch)
             t = now - start
             why = det.feed(frame, t)
+            if why and t < ignore_until:
+                why = None                           # это всё ещё пропущенный (ненужный) улов
+            if rd is not None and not why and now - last_base > 1.0 and det.ref and not det.flash \
+                    and det.seen >= det.ref * 0.9:
+                self.sonar_refresh(sct, rd)          # всё спокойно — обновить снимок фона надписи
+                last_base = now
             if det.ref and not det.flash and det.seen >= det.ref * 0.8:
                 self.watched = (pos, frame)          # спокойный кадр — таким место и запомним
             if det.raised:                          # порог подняли на лету — сообщаем, если заметно
@@ -1773,9 +1809,23 @@ class Fisher:
             if self.record:
                 if why and auto_t is None:
                     auto_t, auto_why = t, why
+                    if rd is not None:
+                        self.sonar_decide(sct, rd, pos)      # в записи — только прочитать и сохранить
                 samples.append((t, det.seen, det.ref))
                 frames.append((t, frame))
             elif why:
+                dec = self.sonar_decide(sct, rd, pos) if rd is not None else None
+                if SONAR_FILTER and dec is not None and not dec[1]:
+                    # клюёт то, что не отмечено: не подсекаем, ждём следующую поклёвку
+                    self.skipped += 1
+                    self.stats()
+                    det.hits = det.jumps = 0
+                    ignore_until = t + SONAR_SKIP_PAUSE
+                    self.log(tr("Сонар: клюёт «%s» — не отмечено, пропускаю.") % self.catch_name(dec[0]))
+                    time.sleep(POLL)
+                    continue
+                if dec is not None:
+                    why = "%s, %s" % (self.catch_name(dec[0]), why)
                 self.hooks += 1
                 self.stats()
                 self.state("hook", tr("Поклёвка!"), tr("Подсекаю…"))
@@ -1786,6 +1836,66 @@ class Fisher:
                           % (why, self.hooks, t), "good")
                 return
             time.sleep(POLL)
+
+    # ---------- сонар: выбор улова ----------
+    def catch_name(self, item_id):
+        it = self.catches.items[item_id]
+        return it["ru"] if i18n.LANG == "ru" else it["en"]
+
+    def current_biome(self):
+        if CATCH_BIOME != "auto":
+            return CATCH_BIOME
+        return self.catches.guess_biome(self.recent_catch) if self.catches else None
+
+    def sonar_reader(self, sct, cl, pos):
+        """Читатель надписи сонара для этого заброса — если выбор улова включён или идёт запись
+        (тогда надписи сохраняются для разбора). None — не нужен или OCR недоступен."""
+        if self.catches is None or not (SONAR_FILTER or self.record or self.debug):
+            return None
+        if self.ocr_ok is None:
+            try:
+                import ocr
+                self.ocr_ok = bool(ocr.available_languages())
+            except Exception:
+                self.ocr_ok = False
+            if not self.ocr_ok and SONAR_FILTER:
+                self.log(tr("Распознавание текста Windows недоступно — выбор улова по сонару не работает."), "bad")
+        if not self.ocr_ok:
+            return None
+        import sonar
+        rd = sonar.SonarReader(self.scale)
+        rd.reg = rd.region(pos, cl)
+        rd.set_base(grab(sct, rd.reg))
+        return rd
+
+    def sonar_refresh(self, sct, rd):
+        """Обновить снимок фона надписи — только если надписи сейчас нет (иначе висящее название
+        пропущенного улова попало бы в «фон» и следующая такая же поклёвка не прочиталась бы)."""
+        frame = grab(sct, rd.reg)
+        if rd.text_mask(frame).sum() < 15:
+            rd.set_base(frame)
+
+    def sonar_decide(self, sct, rd, pos):
+        """Прочитать надпись сонара: (id, ловить ли) или None — надписи нет / не узнали."""
+        tw, th = self.tw, self.th
+        bx, by = pos[0] - rd.reg["left"], pos[1] - rd.reg["top"]
+        frame = grab(sct, rd.reg)
+        text = rd.read(frame, (bx - tw // 2 - 6, by - th // 2 - 6, bx + tw // 2 + 6, by + th // 2 + 6))
+        self.n += 1
+        if rd.last_img is not None:
+            self.save_dbg("%03d_sonar.png" % self.n, frame, scale=2)
+            self.save_dbg("%03d_sonar_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
+        if not text:
+            return None
+        item_id, sim = self.catches.identify(text)
+        if item_id is None:
+            self.log(tr("Сонар: «%s» — не узнал предмет, подсекаю.") % text)
+            return None
+        self.recent_catch.append(item_id)
+        biome = self.current_biome()
+        wanted = not CATCH_WANT or self.catches.wanted(item_id, CATCH_WANT, biome)
+        self.emit("catch", id=item_id, name=self.catch_name(item_id), wanted=wanted, biome=biome)
+        return item_id, wanted
 
     # ---------- режим записи ----------
     def on_click(self, x, y, button, pressed, injected=False):
