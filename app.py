@@ -25,12 +25,14 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.4"
+VERSION = "1.2.5"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
            else os.path.join(os.environ.get("APPDATA") or af.HERE, "TerrariaAutoFish"))
 CFG_PATH = os.path.join(CFG_DIR, "settings.json")
+LOG_DIR = os.path.join(af.HERE, "logs")    # журналы — рядом с программой, как debug и record
+LOG_DAYS = 14                              # столько дней журналы хранятся
 DEFAULTS = {
     "hotkey": "home", "reset_key": "end", "scale": 1.0, "sink_ratio": 0.55, "max_wait": 45,
     "overlay": True, "overlay_pos": None, "toasts": True, "toast_hooks": False,
@@ -287,6 +289,7 @@ class App:
         self.fisher.set_scale(self.cfg["scale"])
         self.overlay = None
         self.toggle_overlay()
+        self.start_log_file()
         self.fisher.start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -564,8 +567,12 @@ class App:
                 row=row, column=0, columnspan=2, sticky="w")
             self.checks[key] = var
             row += 1
-        ttk.Button(box, text=tr("Проверить уведомление"), command=lambda: toast(
-            APP, tr("Так выглядят уведомления программы"))).grid(row=row, column=0, sticky="w", pady=(6, 0))
+        bf = ttk.Frame(box, style="Card.TFrame")
+        bf.grid(row=row, column=0, columnspan=2, sticky="we", pady=(6, 0))
+        ttk.Button(bf, text=tr("Проверить уведомление"), command=lambda: toast(
+            APP, tr("Так выглядят уведомления программы"))).pack(side="left")
+        # всё для разбора проблемы — одним архивом: журнал, настройки, отладочные картинки
+        ttk.Button(bf, text=tr("Собрать отчёт"), command=self.make_report).pack(side="right")
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -711,16 +718,18 @@ class App:
             else:
                 text = tr("Сохранено: %s. Выбран слот %d.") % (os.path.join("hotbar", name + ".png"),
                                                                (sel[0] + 1) % 10)
-                r = self.fisher.rods.scores(frame) if self.fisher.rods else None
+                rods = self.fisher.rods
+                r = rods.scores(frame) if rods else None
                 if r:
-                    out = [v for v, _ in r[1]]
-                    best = max(range(10), key=lambda i: out[i])
-                    text += " " + tr("Больше всего на удочку похож слот %d (%.2f).") % ((best + 1) % 10, out[best])
+                    found = rods.find(frame, af.ROD_HINT_MIN, af.ROD_HINT_MARGIN)
+                    text += " " + (tr("Удочка узнаётся в слоте %d (%.2f).") % ((found[0] + 1) % 10, found[2])
+                                   if found else tr("Удочку уверенно не узнал."))
                     try:
                         with open(os.path.join(folder, name + ".txt"), "w", encoding="utf-8") as fh:
                             fh.write("selected=%d scale=%.2f\n" % ((sel[0] + 1) % 10, sel[1]))
-                            for i, (v, k) in enumerate(r[1]):
-                                fh.write("slot %d: %.3f %s\n" % ((i + 1) % 10, v, k))
+                            for i, (v, k, cnt) in enumerate(r[1]):
+                                fh.write("slot %d: count=%s score=%.3f %s\n" % ((i + 1) % 10, cnt, v, k))
+                            fh.write("rod=%s\n" % (found and (found[0] + 1) % 10))
                     except Exception:
                         pass
             self.q.put(("hb_test", {"text": text}))
@@ -970,6 +979,8 @@ class App:
             self.root.after(1000, self.tick)
 
     def add_log(self, text, kind="info", stamp=None):
+        if stamp is None:                          # новая строка (а не пересоздание журнала) — и в файл
+            self.write_log_file(text, kind)
         stamp = stamp or time.strftime("%H:%M:%S  ")
         self.log_lines = (self.log_lines + [(stamp, text, kind)])[-300:]
         t = self.log_txt
@@ -980,6 +991,83 @@ class App:
             t.delete("1.0", "100.0")
         t.see("end")
         t.config(state="disabled")
+
+    # ---------- журнал в файл и отчёт ----------
+    def write_log_file(self, text, kind="info"):
+        """Журнал пишется и в файл logs/autofish_ГГГГ-ММ-ДД.log рядом с программой."""
+        if self.selftest:
+            return
+        try:
+            os.makedirs(LOG_DIR, exist_ok=True)
+            path = os.path.join(LOG_DIR, time.strftime("autofish_%Y-%m-%d.log"))
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write("%s [%s] %s\n" % (time.strftime("%H:%M:%S"), kind, text.lstrip("> ")))
+        except Exception:
+            pass
+
+    def start_log_file(self):
+        """Новая запись в журнале при запуске; журналы старше LOG_DAYS дней удаляем."""
+        if self.selftest:
+            return
+        try:
+            now = time.time()
+            for f in os.listdir(LOG_DIR) if os.path.isdir(LOG_DIR) else []:
+                p = os.path.join(LOG_DIR, f)
+                if f.endswith(".log") and now - os.path.getmtime(p) > LOG_DAYS * 86400:
+                    os.remove(p)
+        except Exception:
+            pass
+        self.write_log_file("===== %s %s: %s =====" % (APP, VERSION, tr("запуск")))
+
+    def make_report(self):
+        """Архив для разбора проблемы: журналы, настройки, последние отладочные картинки,
+        снимки хотбара и сведения о системе. Открывает папку с архивом."""
+        import zipfile
+
+        def newest(folder, n, exts=(".png", ".txt", ".log")):
+            try:
+                files = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts)]
+            except Exception:
+                return []
+            return sorted(files, key=os.path.getmtime)[-n:]
+
+        path = os.path.join(af.HERE, time.strftime("report_%Y%m%d_%H%M%S.zip"))
+        try:
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+                for f in newest(LOG_DIR, 3, (".log",)):
+                    z.write(f, "logs/" + os.path.basename(f))
+                for name in ("settings.json", "gear.json"):
+                    f = os.path.join(CFG_DIR, name)
+                    if os.path.exists(f):
+                        z.write(f, "settings/" + name)
+                for sub, n in (("debug", 40), ("record", 40), ("hotbar", 20)):
+                    for f in newest(os.path.join(af.HERE, sub), n):
+                        z.write(f, sub + "/" + os.path.basename(f))
+                z.writestr("system.txt", self.system_info())
+        except Exception as e:
+            self.add_log(tr("Не удалось собрать отчёт: %r") % e, "bad")
+            return
+        self.add_log(tr("Отчёт сохранён: %s") % path, "good")
+        try:
+            subprocess.Popen(["explorer", "/select,", path])
+        except Exception:
+            pass
+
+    def system_info(self):
+        import platform
+        lines = ["%s %s" % (APP, VERSION), "portable=%s frozen=%s" % (PORTABLE, getattr(sys, "frozen", False)),
+                 "windows=%s" % platform.platform(), "python=%s" % platform.python_version(),
+                 "screen=%dx%d" % (ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1))]
+        try:
+            hwnd = af.find_terraria()
+            lines.append("terraria_client=%s" % (af.client_rect(hwnd),) if hwnd else "terraria_client=не найдена")
+        except Exception:
+            pass
+        f = self.fisher
+        lines.append("scale=%s rod_slot=%s manual_rod=%s bobber_kind=%s points=%s ratio=%.2f" % (
+            f.scale, f.rod_slot, af.ROD_SLOT, f.bobber_kind, f.has_points(), f.sink_ratio()))
+        lines.append("settings=" + json.dumps(self.cfg, ensure_ascii=False))
+        return "\n".join(lines) + "\n"
 
     def close(self):
         self.cfg["win_pos"] = [self.root.winfo_x(), self.root.winfo_y()]

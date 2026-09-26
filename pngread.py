@@ -7,7 +7,8 @@ import numpy as np
 
 def read_png(path):
     """PNG -> numpy (H, W, 4) uint8 RGBA. Поддерживаются 8-битные RGB/RGBA/серый и палитра 1–8 бит."""
-    data = open(path, "rb").read()
+    with open(path, "rb") as fh:
+        data = fh.read()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
     pos, idat, plte, trns = 8, b"", None, None
     while pos < len(data):

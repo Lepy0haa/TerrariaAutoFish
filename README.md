@@ -21,8 +21,9 @@ memory or files, so it does not depend on the game version.
   water from the images of all bobbers on the Terraria Wiki (every fishing rod's bobber and all
   Fishing Bobber accessories: regular, glowing, lava/krypton/xenon/argon/neon/helium moss). If it
   can't, you simply point at the bobber once.
-- **Takes the fishing rod in hand** — remembers the hotbar slot a successful cast was made from
-  (kept between launches, or set it yourself) and presses its number key if another item got
+- **Takes the fishing rod in hand** — finds the rod in the hotbar by itself (by the bait count
+  written on it and by its shape; all 11 rods from the Wiki), remembers the slot of a successful
+  cast between launches (or set it yourself) and presses its number key if another item got
   selected.
 - **Watches the bobber** — remembers what it looks like and hooks when it sinks.
 - **Auto-calibration** — the hook threshold adapts to your water, weather, time of day and bobber.
@@ -101,13 +102,14 @@ does not take focus away from the game.
 | Small window, notifications, sounds | Ways to know what's happening |
 | Save debug pictures | Pictures of every search and hook in the `debug` folder — for troubleshooting |
 | Record mode | The program casts, you hook yourself; it records how the bobber behaved (`record` folder) |
+| Collect a report | Packs the logs, settings, latest debug pictures, hotbar snapshots and system info into `report_….zip` next to the program — send it when something goes wrong. The log is also written to the `logs` folder (kept for 14 days) |
 
 ### Automation tab
 
 | Setting | What it does |
 |---|---|
 | Select the fishing rod automatically | Before every cast, if another hotbar slot is selected, the program presses the number key of the rod's slot |
-| Fishing rod slot | **Auto:** the program remembers the slot from which a cast actually produced a bobber, and keeps it between launches (just hold the rod the first time). If after switching to that slot no bobber appears, the slot is forgotten and learned again. Or choose the slot number yourself |
+| Fishing rod slot | **Auto:** while the slot is unknown, the program finds the rod in the hotbar by itself; then it remembers the slot from which a cast actually produced a bobber, and keeps it between launches. If after switching to that slot no bobber appears, the slot is forgotten and learned again. Or choose the slot number yourself |
 | Hotbar snapshot | In 3 s saves the in-game hotbar pixel for pixel to the `hotbar` folder next to the program (and how much each slot looks like a fishing rod) — send such snapshots to help tune fishing rod recognition |
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 3, 10, then 20 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
@@ -149,10 +151,11 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 5. **Buffs.** Buff icons are drawn semi-transparent over the background, so they are recognized by
    normalized correlation (it doesn't depend on brightness or tint), at any interface scale.
 6. **Hotbar.** The selected hotbar slot is the bright yellow one; its position gives the slot number.
-   Number keys 1–9, 0 select a slot, just like in the game. The rod's slot is learned from a
-   successful cast: item icons in the hotbar are tiny, and whips, swords and pickaxes look too much
-   like rods, so the Wiki rod images are used only as a hint when the rod is recognized with a
-   large margin.
+   Number keys 1–9, 0 select a slot, just like in the game. By shape alone a rod can't be told from
+   a whip, a sword or a pickaxe (hotbar icons are tiny), but the game writes the bait count on a
+   fishing rod, and weapons and tools have no numbers. So only slots with a number (rods, stacks
+   like potions) are compared with the Wiki rod images, drawn the way the game draws them
+   (smoothly scaled, centered, ignoring the digits). The slot of a successful cast is remembered.
 
 ## Troubleshooting
 
@@ -164,7 +167,7 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 | After restarting, the program doesn't find the bobber | The character moved — press **END** and choose new points |
 | The program asks to point at the bobber | It didn't recognize the bobber (unusual lighting, another mod's bobber) — just point at it once, then everything is automatic |
 | The program switches to a wrong slot | Set the rod slot on the Automation tab, or choose "Auto" and cast once holding the rod — the slot will be remembered again |
-| The first time the rod isn't taken | The program doesn't know the slot yet: hold the rod when you start (the slot will be remembered) or set it on the Automation tab |
+| The rod isn't taken | The rod must have bait (the count is written on it) and the hotbar must be visible (inventory closed). Or set the rod slot on the Automation tab. Press "Hotbar snapshot" and send the snapshot |
 | Potions are not drunk | Check the Quick Buff key; press "Check buffs now" with the buff active and the game visible |
 | Zoom in the game is not 100% | Set the same scale in the settings |
 | No Windows notifications | Check "Do not disturb" / Focus assist in Windows |
@@ -187,6 +190,14 @@ Fine-tuning constants are at the top of `autofish.py`.
 
 `build.bat` builds everything into the `dist` folder: `TerrariaAutoFish.exe`, the installer and the
 portable zip.
+
+### Tests
+
+`run_tests.bat` (or `python -m unittest discover -s tests`) runs about 30 tests in a minute, all on
+real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
+bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
+taking the rod back, a bite, running out of bait, night) run in a "fake game" built from these
+snapshots.
 
 ### Files
 

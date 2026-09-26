@@ -16,3 +16,5 @@ record/
 settings/
 *.npz
 hotbar/
+logs/
+report_*.zip

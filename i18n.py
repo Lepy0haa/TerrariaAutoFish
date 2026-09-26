@@ -275,7 +275,12 @@ EN = {
     "Сохранено: %s. Выбранный (жёлтый) слот не виден — закройте инвентарь и повторите.":
         "Saved: %s. The selected (yellow) slot isn't visible — close the inventory and try again.",
     "Сохранено: %s. Выбран слот %d.": "Saved: %s. Selected slot: %d.",
-    "Больше всего на удочку похож слот %d (%.2f).": "Slot %d looks most like a fishing rod (%.2f).",
+    "Удочка узнаётся в слоте %d (%.2f).": "The fishing rod is recognized in slot %d (%.2f).",
+    "Удочку уверенно не узнал.": "Couldn't recognize the fishing rod with confidence.",
+    "Собрать отчёт": "Collect a report",
+    "запуск": "start",
+    "Не удалось собрать отчёт: %r": "Couldn't collect the report: %r",
+    "Отчёт сохранён: %s": "Report saved: %s",
     "Если в руках не удочка — возьмите её, нажмите %s и начните заново (%s на воде). Слот удочки запомню "
     "сам или задайте его на вкладке «Автоматика».":
         "If you're not holding the fishing rod, select it, press %s and start again (%s on the water). "

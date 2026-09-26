@@ -82,8 +82,8 @@ AUTO_ROD = True       # перед забросом брать удочку в �
 AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
 SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
 ROD_SLOT = None       # слот удочки: None — запоминать самому (по удачному забросу), 0..9 — задан вручную
-ROD_HINT_MIN = 0.5        # пока слот неизвестен: удочка по картинке — только если оценка не ниже этой
-ROD_HINT_MARGIN = 0.15    # ...и намного лучше, чем у всех остальных слотов (иконки мелкие, похожих много)
+ROD_HINT_MIN = 0.45       # пока слот неизвестен: удочка — слот с числом наживки, похожий на удочку хотя бы так
+ROD_HINT_MARGIN = 0.1     # ...и лучше других слотов с числом (зелья, стопки) хотя бы на столько
 SOUND = True          # пищать при старте, отметке, паузе
 # ==================================================================
 
@@ -905,7 +905,8 @@ class Fisher:
             if target is None:
                 self.cast_slot = sel[0]      # забросим тем, что в руках; удался заброс — запомним слот
                 return False
-            self.log(tr("Похоже, удочка в слоте %d (по картинке) — беру её.") % ((target + 1) % 10))
+            if target != sel[0]:
+                self.log(tr("Похоже, удочка в слоте %d (по картинке) — беру её.") % ((target + 1) % 10))
         if sel[0] == target:
             self.cast_slot = target
             return False
@@ -931,18 +932,11 @@ class Fisher:
         return True
 
     def rod_hint(self, frame, selected):
-        """Слот, где удочка узнаётся по картинке очень уверенно, или None."""
+        """Слот, где удочка узнаётся уверенно (есть число наживки и форма удочки), или None."""
         if self.rods is None:
             return None
-        r = self.rods.scores(frame)
-        if r is None:
-            return None
-        out = [v for v, _ in r[1]]
-        best = max(range(len(out)), key=lambda i: out[i])
-        rest = max((v for i, v in enumerate(out) if i != best), default=0.0)
-        if best != selected and out[best] >= ROD_HINT_MIN and out[best] - rest >= ROD_HINT_MARGIN:
-            return best
-        return None
+        r = self.rods.find(frame, ROD_HINT_MIN, ROD_HINT_MARGIN)
+        return r[0] if r else None
 
     def sprite_candidates(self, frame, n=8, changed=None):
         """Места, где может быть поплавок: пятна ярких цветов, не похожих на небо и воду
