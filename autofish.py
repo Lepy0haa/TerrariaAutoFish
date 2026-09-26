@@ -495,6 +495,7 @@ class Fisher:
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
         self.rod_name = None               # какая это удочка (ключ картинки) или None — не узнали
         self.bobber_kind = None            # какой поплавок (ключ картинки) или None — не узнали
+        self.mark_before = None            # снимок места до первого заброса (для поиска поплавка)
         self.started = None                # когда начали рыбачить (для «подсечек в час»)
         self.n = 0
         self.listeners = []
@@ -896,36 +897,56 @@ class Fisher:
                 self.emit("notify", title=tr("Удочка"), text=tr("Не получается взять удочку. Возьмите её в руки сами."))
         return True
 
-    def sprite_candidates(self, frame, n=8):
+    def sprite_candidates(self, frame, n=8, changed=None):
         """Места, где может быть поплавок: пятна ярких цветов, не похожих на небо и воду
-        (лучшие n, не ближе ширины поплавка друг к другу). Список (x, y) центров."""
+        (лучшие n, не ближе ширины поплавка друг к другу). Список (x, y) центров.
+        changed — маска того, что изменилось после заброса (тогда ищем только среди нового)."""
         tw, th = self.tw, self.th
         if frame.shape[0] < th or frame.shape[1] < tw:
             return []
         k = min(1.0, light_factor(frame))
-        sky = np.median(frame[:3].reshape(-1, 3), 0)
-        water = np.median(frame[-3:].reshape(-1, 3), 0)
-        far = np.minimum(np.abs(frame - sky).max(2), np.abs(frame - water).max(2)) > BG_DIST * k
+        # фон — обычный цвет своей же строки: небо, вода (у поверхности светлее, чем в глубине)
+        # и кромка воды идут горизонтальными полосами, а поплавок занимает в строке мало места
+        row_bg = np.median(frame, 1)[:, None, :]
+        far = np.abs(frame - row_bg).max(2) > BG_DIST * k
         vivid = (frame.max(2) - frame.min(2)) > SAT_MIN * k
-        m = (far & vivid).astype(np.int32)
+        m = far & vivid
+        if changed is not None:
+            m &= changed
+        # только «сплошные» места (все соседи 3x3 тоже яркие): у поплавка они есть, а у тонких
+        # полос — светлой кромки воды, лески, контуров — нет, иначе они забирают всех кандидатов
+        core = m.copy()
+        core[0, :] = core[-1, :] = core[:, 0] = core[:, -1] = False
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                core[1:-1, 1:-1] &= m[1 + dy:m.shape[0] - 1 + dy, 1 + dx:m.shape[1] - 1 + dx]
+        m = core.astype(np.int32)
         ii = np.pad(m.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
         sums = (ii[th:, tw:] - ii[:-th, tw:] - ii[th:, :-tw] + ii[:-th, :-tw]).astype(np.float64)
+        # поплавок — отдельное пятно: в окне вдвое больше вокруг него ярких мест почти не прибавляется.
+        # У больших ярких областей (пирс, постройки, NPC, отражения) — прибавляется много
+        py, px = th // 2, tw // 2
+        jj = np.pad(np.pad(m, ((py, py), (px, px))).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+        H, W = th + 2 * py, tw + 2 * px
+        big = (jj[H:, W:] - jj[:-H, W:] - jj[H:, :-W] + jj[:-H, :-W]).astype(np.float64)
+        if changed is None:
+            sums[sums < 0.5 * big] = 0
         out = []
         for _ in range(n):
             y, x = np.unravel_index(int(sums.argmax()), sums.shape)
-            if sums[y, x] < max(3, self.min_bobber_px // 2):
+            if sums[y, x] < 2:
                 break
             out.append((int(x) + tw // 2, int(y) + th // 2))
             sums[max(0, y - th):y + th, max(0, x - tw):x + tw] = -1
         return out
 
-    def sprite_search(self, frame, only=None):
+    def sprite_search(self, frame, only=None, changed=None, n=8):
         """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ) или None."""
         if self.bobber_sprites is None:
             return None
         pad_x, pad_y = self.tw + int(8 * self.scale), self.th + int(8 * self.scale)
         best = None
-        for cx, cy in self.sprite_candidates(frame):
+        for cx, cy in self.sprite_candidates(frame, n, changed):
             x0, y0 = max(0, cx - pad_x), max(0, cy - pad_y)
             patch = frame[y0:cy + pad_y, x0:cx + pad_x]
             r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only)
@@ -934,11 +955,8 @@ class Fisher:
                 best = (v, x0 + x + w // 2, y0 + y + h // 2, key)
         return best
 
-    def auto_mark(self, sct, cl, player):
-        """Первый заброс: найти поплавок самому по картинкам поплавков с Вики — между игроком
-        и точкой заброса (и чуть дальше). Возвращает центр или None (тогда попросим отметить)."""
-        if not AUTO_MARK or self.bobber_sprites is None:
-            return None
+    def mark_area(self, cl, player):
+        """Где искать поплавок после первого заброса: между игроком и точкой заброса и чуть дальше."""
         s = self.scale
         cx, cy = self.cast_point
         x0 = max(cl[0], min(player[0], cx) - int(120 * s))
@@ -947,29 +965,65 @@ class Fisher:
         y1 = min(cl[3], max(player[1], cy) + int(120 * s))
         if x1 - x0 < 3 * self.tw or y1 - y0 < 3 * self.th:
             return None
-        area = {"left": x0, "top": y0, "width": x1 - x0, "height": y1 - y0}
+        return {"left": x0, "top": y0, "width": x1 - x0, "height": y1 - y0}
+
+    def auto_mark(self, sct, cl, player):
+        """Первый заброс: найти поплавок самому по картинкам поплавков с Вики — между игроком
+        и точкой заброса (и чуть дальше). Возвращает центр или None (тогда попросим отметить)."""
+        if not AUTO_MARK or self.bobber_sprites is None:
+            return None
+        s, tw, th = self.scale, self.tw, self.th
+        area = self.mark_area(cl, player)
+        if area is None:
+            return None
+        x0, y0 = area["left"], area["top"]
         frame = grab(sct, area)
+        before = self.mark_before
+        if before is not None and before.shape != frame.shape:
+            before = None
         # сам игрок, удочка у него в руках и курсор (он над головой игрока) — не поплавок
         for (px, py), hx, hy in ((player, int(28 * s), int(45 * s)), (self.park, int(25 * s), int(25 * s))):
             px, py = px - x0, py - y0
-            frame[max(0, py - hy):max(0, py + hy), max(0, px - hx):max(0, px + hx)] = frame[0, 0]
-        best = self.sprite_search(frame)
+            for img in (frame, before):
+                if img is not None:
+                    img[max(0, py - hy):max(0, py + hy), max(0, px - hx):max(0, px + hx)] = frame[0, 0]
+        best = None
+        if before is not None:
+            # главное: поплавок появился только после заброса. Пирс, столбы, NPC и прочее
+            # яркое стоят на месте — среди изменившегося их нет
+            changed = np.abs(frame - before).max(2) > 30
+            best = self.sprite_search(frame, changed=changed, n=10)
         if best is None or best[0] < SPRITE_MIN:
-            if best is not None and self.debug:
+            # снимка до заброса нет или новое не похоже на поплавок — ищем среди всего яркого,
+            # но строже (там больше похожего)
+            other = self.sprite_search(frame)
+            if other is not None and other[0] >= SPRITE_MIN + 0.05 and (best is None or other[0] > best[0]):
+                best = other
+        self.n += 1
+        self.save_dbg("%03d_avto_poisk.png" % self.n, frame, scale=2,
+                      rects=[(best[1] - tw // 2, best[2] - th // 2, tw, th,
+                              (0, 255, 0) if best[0] >= SPRITE_MIN else (0, 0, 255))] if best else [])
+        if best is None or best[0] < SPRITE_MIN:
+            if best is not None:
                 self.log(tr("Похожее на поплавок: %s, совпадение %.2f — мало.")
                          % (self.bobber_sprites.title(best[3]), best[0]))
             return None
         v, bx, by, key = best
         # уточняем место так же, как при отметке курсором
-        tw, th, snap = self.tw, self.th, self.snap
+        snap = self.snap
         center = (x0 + bx, y0 + by)
         near = rect_around(center, tw // 2 + snap, th // 2 + snap)
-        if not inside(near, cl):
+        nx0, ny0 = max(cl[0], near["left"]), max(cl[1], near["top"])     # у края окна — обрезаем
+        nx1 = min(cl[2], near["left"] + near["width"])
+        ny1 = min(cl[3], near["top"] + near["height"])
+        if nx1 - nx0 < tw or ny1 - ny0 < th:
             return None
+        near = {"left": nx0, "top": ny0, "width": nx1 - nx0, "height": ny1 - ny0}
         near_frame = grab(sct, near)
         corner = snap_adaptive(near_frame, tw, th, self.min_bobber_px)
-        if corner is None:
-            corner = (snap, snap)                  # пятно не выделилось — берём место по картинке
+        if corner is None:                         # пятно не выделилось — берём место по картинке
+            corner = (int(np.clip(center[0] - nx0 - tw // 2, 0, near["width"] - tw)),
+                      int(np.clip(center[1] - ny0 - th // 2, 0, near["height"] - th)))
         self.bobber_kind = key
         self.adopt_bobber(near, near_frame, *corner)
         self.gear_changed()
@@ -1002,15 +1056,22 @@ class Fisher:
             y0, x0 = max(0, y - m), max(0, x - m)
             corner = snap_adaptive(frame[y0:y + th + m, x0:x + tw + m], tw, th, self.min_bobber_px)
             if corner is not None:
-                hit, blob = (x0 + corner[0], y0 + corner[1]), True
-                break
+                cand = (x0 + corner[0], y0 + corner[1])
+                # в широкой зоне бывает яркое и не поплавок (доски пирса, факелы) — сверяем цвета
+                if not wide or any(same_colors(frame[cand[1]:cand[1] + th, cand[0]:cand[0] + tw], r)
+                                   for r in (self.bobber, self.bobber0) if r is not None):
+                    hit, blob = cand, True
+                    break
             if err <= NOT_FOUND_ERR and not strict:
                 hit = (x, y)
                 break
         if hit is None and wide:
             corner = snap_adaptive(frame, tw, th, self.min_bobber_px)
-            if corner is not None and same_colors(frame[corner[1]:corner[1] + th, corner[0]:corner[0] + tw],
-                                                   self.bobber0 if self.bobber0 is not None else self.bobber):
+            ref = self.bobber0 if self.bobber0 is not None else self.bobber
+            patch = frame[corner[1]:corner[1] + th, corner[0]:corner[0] + tw] if corner is not None else None
+            # похоже и цветом, и силуэтом (отражения, факелы и доски бывают того же цвета)
+            if (corner is not None and same_colors(patch, ref) and
+                    bobber_likeness(patch, ref) >= SIMILAR_MIN):
                 hit, blob = corner, True
         self.n += 1
         if hit:
@@ -1225,6 +1286,14 @@ class Fisher:
         # 1. заброс
         if pos is None:
             self.state("cast", tr("Заброс"), tr("Мышь не трогайте"))
+            self.mark_before = None
+            if self.bobber is None and AUTO_MARK and self.bobber_sprites is not None:
+                # снимок до заброса: потом поплавок найдётся среди того, что появилось
+                area = self.mark_area(cl, player)
+                if area is not None:
+                    set_cursor(*self.park)
+                    time.sleep(0.05)
+                    self.mark_before = grab(sct, area)
             click(cx, cy)
             self.phase, self.watched = "unknown", None     # заброшен, но ещё не нашли
             self.casts += 1

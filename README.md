@@ -121,8 +121,10 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 
 ## How it works
 
-1. **Finding the bobber the first time.** The program takes bright spots between the character
-   and the cast point and compares each with the images of all bobbers from the Terraria Wiki —
+1. **Finding the bobber the first time.** Right before the first cast the program takes a picture
+   of the area between the character and the cast point; after the cast it looks only at what has
+   appeared (the pier, torches, NPCs and posts stay in place), and compares the new solid bright
+   spots with the images of all bobbers from the Terraria Wiki —
    only the above-water part of the bobber, only its opaque pixels, by normalized correlation (so
    brightness and tint don't matter). A match of 75%+ is accepted (a real bobber gives 85–95%,
    empty water about 60%). Otherwise you point at the bobber; the program finds the solid bright

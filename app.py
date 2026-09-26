@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
