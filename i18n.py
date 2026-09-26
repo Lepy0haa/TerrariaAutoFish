@@ -310,6 +310,26 @@ EN = {
         "The character is taking damage (%d%% less health) — reeled in and paused.",
     "персонаж получает урон": "the character is taking damage",
     "Наживка": "Bait",
+    # зелья из хотбара
+    "%s — слот %d": "%s — slot %d",
+    "Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет. Держите в инвентаре только нужные зелья.":
+        "Quick Buff drinks every buff potion in the inventory whose buff is not active. Keep only the potions you need.",
+    "В хотбаре зелий не нашёл.": "No potions found in the hotbar.",
+    "В хотбаре: ": "In the hotbar: ",
+    "Из хотбара: программа находит нужное зелье в хотбаре, берёт его цифрой слота, пьёт и снова берёт удочку. Положите зелья в хотбар.":
+        "From the hotbar: the program finds the needed potion in the hotbar, selects it with the slot's number "
+        "key, drinks it and takes the fishing rod again. Put the potions into the hotbar.",
+    "Нажал %s, чтобы взять зелье, но слот не сменился.": "Pressed %s to take the potion, but the slot didn't change.",
+    "Не вижу баффа «%s» после зелья из хотбара — зелье кончилось или не выпилось.":
+        "No «%s» buff after the potion from the hotbar — out of potions or it wasn't drunk.",
+    "Нет «%s» в хотбаре — положите зелье в хотбар.": "No «%s» in the hotbar — put the potion into the hotbar.",
+    "Нет «%s» в хотбаре.": "No «%s» in the hotbar.",
+    "Пить": "Drink",
+    "Хотбар не виден (открыт инвентарь?) — зелья из хотбара не выпить.":
+        "The hotbar isn't visible (inventory open?) — can't drink potions from the hotbar.",
+    "быстрым баффом": "with Quick Buff",
+    "из хотбара": "from the hotbar",
+    "клавиша быстрого баффа": "Quick Buff key",
     "резкий нырок, видно %d%% поплавка": "sharp dip, %d%% of the bobber visible",
     "Наживки осталось меньше 10.": "Less than 10 bait left.",
     "кончилась наживка (на удочке нет числа наживки)": "out of bait (no bait count on the fishing rod)",

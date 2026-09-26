@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.6"
+VERSION = "1.2.7"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -38,7 +38,7 @@ DEFAULTS = {
     "overlay": True, "overlay_pos": None, "toasts": True, "toast_hooks": False,
     "sound": True, "hook_sound": False, "debug": False, "record": False, "win_pos": None,
     "lang": "auto", "auto_calib": True, "auto_recover": True, "auto_resume": True,
-    "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b",
+    "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b", "buff_method": "hotbar",
     "auto_rod": True, "auto_mark": True, "rod_slot": "auto",
     "buff_sonar": False, "buff_calm": False, "health_guard": True, "bait_watch": True,
     "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
@@ -384,6 +384,7 @@ class App:
         af.STOP_AFTER_HOOKS = int(self.cfg["stop_after_hooks"])
         af.SHUTDOWN_AFTER = bool(self.cfg["shutdown_after"])
         af.BUFF_KEY = self.cfg["buff_key"]
+        af.BUFF_METHOD = self.cfg["buff_method"]
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
         af.MAX_WAIT = float(self.cfg["max_wait"])
         af.SOUND = bool(self.cfg["sound"])
@@ -671,21 +672,37 @@ class App:
                 row=i // 2, column=i % 2, sticky="w", padx=(0, 30))
         row = ttk.Frame(box, style="Card.TFrame")
         row.pack(fill="x", pady=(6, 0))
-        ttk.Label(row, text=tr("Клавиша быстрого баффа (как в игре)"), style="Card.TLabel").pack(side="left")
+        ttk.Label(row, text=tr("Пить"), style="Card.TLabel").pack(side="left")
+        methods = [("hotbar", tr("из хотбара")), ("quick", tr("быстрым баффом"))]
+        self.method_var = tk.StringVar(value=dict(methods).get(self.cfg["buff_method"], methods[0][1]))
+        cb = ttk.Combobox(row, textvariable=self.method_var, values=[t for _, t in methods],
+                          state="readonly", width=16)
+        cb.pack(side="left", padx=(8, 0))
+        cb.bind("<<ComboboxSelected>>", lambda e: (
+            self.set_auto_opt("buff_method", {t: k for k, t in methods}[self.method_var.get()]),
+            self.method_hint.config(text=self.method_text())))
         self.buffkey_var = tk.StringVar(value=self.cfg["buff_key"].upper())
-        cb = ttk.Combobox(row, textvariable=self.buffkey_var, values=[k.upper() for k in BUFF_KEYS],
+        kb = ttk.Combobox(row, textvariable=self.buffkey_var, values=[k.upper() for k in BUFF_KEYS],
                           state="readonly", width=5)
-        cb.pack(side="right")
-        cb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt("buff_key", self.buffkey_var.get().lower()))
-        ttk.Label(box, text=tr("Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет, "
-                               "и не тратит зелья, если бафф ещё идёт. Держите в инвентаре только нужные зелья."),
-                  style="Muted.TLabel", wraplength=390, justify="left").pack(anchor="w", pady=(6, 0))
+        kb.pack(side="right")
+        kb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt("buff_key", self.buffkey_var.get().lower()))
+        ttk.Label(row, text=tr("клавиша быстрого баффа"), style="Muted.TLabel").pack(side="right", padx=(0, 6))
+        self.method_hint = ttk.Label(box, text=self.method_text(), style="Muted.TLabel", wraplength=390,
+                                     justify="left")
+        self.method_hint.pack(anchor="w", pady=(6, 0))
         row = ttk.Frame(box, style="Card.TFrame")
         row.pack(fill="x", pady=(8, 0))
         ttk.Button(row, text=tr("Проверить баффы сейчас"), command=self.test_buffs).pack(side="left")
         self.buff_test_lbl = ttk.Label(box, text=tr("Игра должна быть видна на экране (окно программы не должно её закрывать)."),
                                        style="Muted.TLabel", wraplength=390, justify="left")
         self.buff_test_lbl.pack(anchor="w", pady=(4, 0))
+
+    def method_text(self):
+        if self.cfg["buff_method"] == "hotbar":
+            return tr("Из хотбара: программа находит нужное зелье в хотбаре, берёт его цифрой слота, пьёт "
+                      "и снова берёт удочку. Положите зелья в хотбар.")
+        return tr("Быстрый бафф выпивает все зелья-баффы из инвентаря, чьих баффов сейчас нет. "
+                  "Держите в инвентаре только нужные зелья.")
 
     def build_away(self, p):
         """Вкладка «Без присмотра»: защита персонажа, наживка, когда закончить рыбалку."""
@@ -796,9 +813,16 @@ class App:
                 self.q.put(("buff_test", {"text": tr("Окно Terraria не найдено — игра запущена?")}))
                 return
             with (getattr(mss, "MSS", None) or mss.mss)() as sct:
-                status = self.fisher.check_buffs(sct, af.client_rect(hwnd), force=True) or {}
+                cl = af.client_rect(hwnd)
+                status = self.fisher.check_buffs(sct, cl, force=True) or {}
+                slots = self.fisher.potion_slots(self.fisher.hotbar_frame(sct, cl))
             want = {n: ok for n, ok in status.items()}
-            self.q.put(("buff_test", {"text": self.buff_text(want) if want else tr("Не выбрано ни одного зелья.")}))
+            text = self.buff_text(want) if want else tr("Не выбрано ни одного зелья.")
+            names = {"fishing": tr("рыбалки"), "crate": tr("ящиков"), "sonar": tr("сонара"), "calm": tr("спокойствия")}
+            text += "\n" + (tr("В хотбаре: ") + ", ".join(tr("%s — слот %d") % (names[n], (j + 1) % 10)
+                                                          for n, j in sorted(slots.items(), key=lambda x: x[1]))
+                            if slots else tr("В хотбаре зелий не нашёл."))
+            self.q.put(("buff_test", {"text": text}))
         threading.Thread(target=work, daemon=True).start()
 
     def show_hb(self, text):

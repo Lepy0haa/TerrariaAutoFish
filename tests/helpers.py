@@ -79,7 +79,7 @@ class FakeGame:
         self.night = night
         self.decoy = False
         self.selected = selected
-        self.clicks, self.keys = [], []
+        self.clicks, self.keys, self.used = [], [], []
         self.cursor = (self.BX, self.OFF)
         self.lock = threading.Lock()
 
@@ -103,6 +103,9 @@ class FakeGame:
 
     def click(self, x, y, hold=0.06):
         with self.lock:
+            if self.selected != "5":                 # в руках не удочка: клик — использовать предмет
+                self.used.append(self.selected)      # (зелье в слоте 9 — выпить)
+                return
             if self.out:
                 self.out = False
                 self.clicks.append("вытащил")

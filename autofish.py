@@ -83,6 +83,9 @@ RESUME_AFTER = 2.0    #   ...через столько секунд в игре
 BUFFS_ON = False      # следить за зельями и пить их (клавишей быстрого баффа)
 BUFF_WANT = {"fishing": True, "crate": True, "sonar": False, "calm": False}   # какие баффы держать
 BUFF_KEY = "b"        # клавиша быстрого баффа в Terraria (по умолчанию B)
+BUFF_METHOD = "hotbar"    # как пить: "hotbar" — нужное зелье из хотбара (цифра слота + клик),
+                          #   "quick" — быстрым баффом (выпивает все зелья-баффы из инвентаря)
+POTION_MIN = 0.6      # зелье в слоте хотбара узнаём, если картинка с Вики совпала хотя бы так
 BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
 BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
@@ -603,10 +606,11 @@ class Fisher:
             import hotbar
             import sprites
             self.rods = hotbar.RodFinder(os.path.join(ASSET_DIR, "rods"))
+            self.potions = hotbar.ItemFinder(os.path.join(ASSET_DIR, "potions"))
             self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=0.55,
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
-            self.rods = self.bobber_sprites = None
+            self.rods = self.bobber_sprites = self.potions = None
         self.rod_slot = None               # в каком слоте хотбара удочка (0..9) — запоминаем по удачному забросу
         self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
@@ -1473,7 +1477,7 @@ class Fisher:
 
     # ---------- зелья ----------
     def check_buffs(self, sct, cl, force=False):
-        """Есть ли нужные баффы. Нет — нажать быстрый бафф и проверить, получилось ли."""
+        """Есть ли нужные баффы. Нет — выпить (из хотбара или быстрым баффом) и проверить."""
         if self.buffs is None or not (BUFFS_ON or force):
             return None
         now = time.time()
@@ -1491,21 +1495,83 @@ class Fisher:
         missing = [n for n in want if not status[n] and now >= self.buff_backoff.get(n, 0)]
         if not missing:
             return status
-        press_key(BUFF_KEY)
-        time.sleep(0.9)
+        if BUFF_METHOD == "hotbar" and self.potions is not None:
+            missing = self.drink_from_hotbar(sct, cl, missing, now)
+            if not missing:
+                status = {n: status[n] for n in want}
+                return status
+            time.sleep(0.5)
+        else:
+            press_key(BUFF_KEY)
+            time.sleep(0.9)
         have = self.buffs.find(grab(sct, region))
         for n in missing:
             if have[n] >= BUFF_THRESHOLD():
                 self.log(tr("Выпил: %s.") % tr(BUFF_NAMES[n]), "good")
             else:
                 self.buff_backoff[n] = now + BUFF_BACKOFF
-                self.log(tr("Не вижу баффа «%s» и после быстрого баффа — кончились зелья?") % tr(BUFF_NAMES[n]),
-                         "bad")
+                why = (tr("Не вижу баффа «%s» после зелья из хотбара — зелье кончилось или не выпилось.")
+                       if BUFF_METHOD == "hotbar" and self.potions is not None else
+                       tr("Не вижу баффа «%s» и после быстрого баффа — кончились зелья?"))
+                self.log(why % tr(BUFF_NAMES[n]), "bad")
                 self.emit("notify", title=tr("Зелья"),
                           text=tr("Не получается выпить: %s. Кончились зелья?") % tr(BUFF_NAMES[n]))
         status = {n: have[n] >= BUFF_THRESHOLD() for n in want}
         self.emit("buffs", status=status)
         return status
+
+    def potion_slots(self, frame):
+        """Какие зелья лежат в хотбаре: {зелье: номер слота}. Слот засчитываем зелью, только если
+        он похож именно на него больше, чем на другие зелья, и достаточно сильно."""
+        r = self.potions.all_scores(frame) if self.potions is not None else None
+        if r is None:
+            return {}
+        found = {}
+        for j, (sc, _) in enumerate(r[1]):
+            if not sc:
+                continue
+            key = max(sc, key=sc.get)
+            if sc[key] >= POTION_MIN and (key not in found or sc[key] > found[key][1]):
+                found[key] = (j, sc[key])
+        return {k: v[0] for k, v in found.items()}
+
+    def drink_from_hotbar(self, sct, cl, missing, now):
+        """Выпить нужные зелья точечно: цифра слота зелья, клик (зелье выпивается), потом снова
+        удочка в руки. Смена предмета убирает поплавок — поэтому пьём между забросами.
+        Возвращает зелья, которые выпить так не вышло (их нет в хотбаре)."""
+        import hotbar
+        frame = self.hotbar_frame(sct, cl)
+        sel = hotbar.selected_slot(frame)
+        if sel is None:
+            self.log(tr("Хотбар не виден (открыт инвентарь?) — зелья из хотбара не выпить."), "bad")
+            return []
+        slots = self.potion_slots(frame)
+        back = self.rod_target()
+        if back is None:
+            back = sel[0]                        # вернём то, что было в руках (обычно удочка)
+        drank, left = [], []
+        for n in missing:
+            if n not in slots:
+                self.buff_backoff[n] = now + BUFF_BACKOFF
+                self.log(tr("Нет «%s» в хотбаре — положите зелье в хотбар.") % tr(BUFF_NAMES[n]), "bad")
+                self.emit("notify", title=tr("Зелья"), text=tr("Нет «%s» в хотбаре.") % tr(BUFF_NAMES[n]))
+                continue
+            key = str((slots[n] + 1) % 10)
+            press_key(key)
+            time.sleep(0.25)
+            now_sel = hotbar.selected_slot(self.hotbar_frame(sct, cl))
+            if now_sel is None or now_sel[0] != slots[n]:
+                self.log(tr("Нажал %s, чтобы взять зелье, но слот не сменился.") % key, "bad")
+                left.append(n)
+                continue
+            click(*self.park)                    # зелье пьётся кликом (курсор — над персонажем)
+            time.sleep(0.4)
+            drank.append(n)
+        if drank or left:
+            press_key(str((back + 1) % 10))      # снова удочка в руки
+            time.sleep(0.25)
+            self.phase, self.watched = "idle", None
+        return drank + left
 
     def cycle(self, sct):
         hwnd = terraria_window()

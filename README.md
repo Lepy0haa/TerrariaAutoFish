@@ -118,12 +118,15 @@ does not take focus away from the game.
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 3, 10, then 20 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
-| Watch buffs and drink potions | Every 20 s the program looks for the chosen buff icons (Fishing, Crate, Sonar, Calm; top left). If a buff is gone, it presses **Quick Buff** (B by default) and checks that the buff is back. If not — "out of potions?" notification |
-| Quick Buff key | Same as in Terraria's controls |
+| Watch buffs and drink potions | Every 20 s the program looks for the chosen buff icons (Fishing, Crate, Sonar, Calm; top left). If a buff is gone, it drinks the potion and checks that the buff is back. If not — "out of potions?" notification |
+| Drink: from the hotbar | The program finds exactly the needed potion in the hotbar (by the Wiki potion images; potions show a count), selects it with the slot's number key, drinks it with a click and takes the fishing rod again. Only between casts: switching items takes the bobber out of the water. If the potion isn't in the hotbar — a notification |
+| Drink: with Quick Buff | Presses **Quick Buff** (B by default, the same key as in Terraria's controls) |
 | Check buffs now | Shows which buffs the program sees right now (the game must be visible) |
 
-Quick Buff drinks every buff potion in the inventory whose buff is not active and never wastes a
-potion whose buff is still running — keep only the potions you need in the inventory.
+From the hotbar only the needed potion is drunk. Quick Buff drinks every buff potion in the
+inventory whose buff is not active and never wastes a potion whose buff is still running — with it
+keep only the potions you need in the inventory. "Check buffs now" also shows which hotbar slots
+hold the potions.
 
 ### Unattended tab
 

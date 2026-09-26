@@ -13,7 +13,7 @@ import sprites
 # Замерено по скриншоту хотбара при масштабе интерфейса 100 %:
 INNER = 50         # ширина жёлтой заливки выбранного слота
 BORDER = 3         # тёмная рамка вокруг слота
-STEP = 44          # шаг между обычными (маленькими) слотами
+STEP = 45          # шаг между слотами (замерено по левому краю выбранного слота: 21 + 45·номер)
 SMALL = 40         # размер обычного слота вместе с рамкой
 AFTER = 61         # от левого края выбранного слота до левого края следующего
 LEFT = 21          # левый край первого слота
@@ -47,6 +47,10 @@ def selected_slot(frame):
     index = int(round((x0 - LEFT * u) / (STEP * u)))
     if not 0 <= index <= 9:
         return None
+    if index >= 2:
+        # масштаб точнее по месту выбранного слота (левый край — (21 + 45·номер)·масштаб), чем
+        # по ширине заливки: ошибка в пару пикселей по ширине набегает к дальним слотам
+        u = x0 / float(LEFT + STEP * index)
     return index, u, (int(x0), int(y0), int(x1), int(y1))
 
 
@@ -54,15 +58,16 @@ def slot_boxes(index, u, sel_box):
     """Прямоугольники всех 10 слотов (x0, y0, x1, y1) и их размер относительно полного."""
     sx0, sy0, sx1, sy1 = sel_box
     cy = (sy0 + sy1) / 2.0
-    small, step = SMALL * u, STEP * u
+    small = SMALL * u
     boxes = []
     for j in range(10):
-        if j < index:
-            x0, size, rel = sx0 - (index - j) * step, small, 0.75
-        elif j == index:
+        # слоты считаем от начала хотбара: левый край — (21 + 45·номер)·масштаб, а правее
+        # выбранного (он шире) — ещё на (61 − 45)·масштаб
+        x0 = (LEFT + STEP * j + (AFTER - STEP if j > index else 0)) * u
+        if j == index:
             x0, size, rel = sx0, sx1 - sx0, 1.0
         else:
-            x0, size, rel = sx0 + AFTER * u + (j - index - 1) * step, small, 0.75
+            size, rel = small, 0.75
         boxes.append((int(x0), int(cy - size / 2), int(x0 + size), int(cy + size / 2), rel))
     return boxes
 
@@ -139,8 +144,9 @@ def icon_score(cell, rgba, s, bg):
     cy, cx = int(round(H / 2.0 - h / 2.0)), int(round(W / 2.0 - w / 2.0))
     txt = text_mask(cell)
     best = -1.0
-    for dy in range(-3, 4):
-        for dx in range(-3, 4):
+    # ±6 пикселей: раскладку хотбара мы знаем с точностью до пары пикселей
+    for dy in range(-4, 5):
+        for dx in range(-6, 7):
             y0, x0 = cy + dy, cx + dx
             if y0 < 0 or x0 < 0 or y0 + h > H or x0 + w > W:
                 continue
@@ -154,24 +160,31 @@ def icon_score(cell, rgba, s, bg):
     return best
 
 
-class RodFinder:
-    """Где в хотбаре удочка. По одной форме иконки удочку не отличить: иконки мелкие, а мечи,
-    кнуты и кирки — такие же диагональные палочки. Но на удочке игра пишет, сколько наживки,
-    а на оружии и инструментах чисел нет. Поэтому сравниваем с картинками удочек только
-    слоты с числом (удочки и стопки вроде зелий), а среди них удочку отличает форма."""
+class ItemFinder:
+    """Предметы в хотбаре по картинкам с Вики (папка folder, файл = ключ предмета).
+    Сравниваем только слоты с числом внизу (стопки, удочки с наживкой) — у них есть что узнавать,
+    а мелкие иконки оружия и инструментов слишком похожи на что угодно."""
 
-    def __init__(self, rods_dir):
-        self.rods = sprites.SpriteSet(rods_dir, names=sprites.ROD_NAMES)
-        self.rgba = {}
+    def __init__(self, folder):
         import os
         from pngread import read_png
-        for f in sorted(os.listdir(rods_dir)):
+        self.rgba = {}
+        for f in sorted(os.listdir(folder)):
             if f.endswith(".png"):
-                self.rgba[f[:-4]] = read_png(os.path.join(rods_dir, f))
+                self.rgba[f[:-4]] = read_png(os.path.join(folder, f))
 
-    def scores(self, frame):
-        """(номер выбранного слота, [(оценка, удочка, есть ли число), ...] по слотам) или None,
-        если хотбар не виден. Слоты без числа не сравниваем (оценка 0)."""
+    def cell_scores(self, cell, size):
+        """{ключ: оценка} для одного слота (size — его размер относительно полного)."""
+        bg = slot_background(cell)
+        out = {}
+        for key, rgba in self.rgba.items():
+            h, w = rgba.shape[:2]
+            base = min(1.0, 32.0 / max(h, w)) * size       # как игра уменьшает предмет в слоте
+            out[key] = max(icon_score(cell, rgba, base * k, bg) for k in (0.95, 1.0, 1.05))
+        return out
+
+    def cells(self, frame):
+        """(номер выбранного слота, [(слот, его размер, есть ли число), ...]) или None."""
         sel = selected_slot(frame)
         if sel is None:
             return None
@@ -179,19 +192,66 @@ class RodFinder:
         out = []
         for x0, y0, x1, y1, rel in slot_boxes(index, u, box):
             cell = frame[max(0, y0):y1, max(0, x0):x1].astype(np.float64)
-            best = (0.0, None, False)
-            if cell.shape[0] >= 16 and cell.shape[1] >= 16 and has_count(cell, rel * u):
-                bg = slot_background(cell)
-                best = (-1.0, None, True)
-                for key, rgba in self.rgba.items():
-                    h, w = rgba.shape[:2]
-                    base = min(1.0, 32.0 / max(h, w)) * rel * u      # как игра уменьшает предмет в слоте
-                    for k in (0.95, 1.0, 1.05):
-                        v = icon_score(cell, rgba, base * k, bg)
-                        if v > best[0]:
-                            best = (v, key, True)
-            out.append(best)
+            ok = cell.shape[0] >= 16 and cell.shape[1] >= 16 and has_count(cell, rel * u)
+            out.append((cell, rel * u, ok))
         return index, out
+
+    def all_scores(self, frame):
+        """(номер выбранного слота, [({ключ: оценка} или None, есть ли число), ...] по слотам)
+        или None, если хотбар не виден."""
+        r = self.cells(frame)
+        if r is None:
+            return None
+        return r[0], [(self.cell_scores(c, size) if ok else None, ok) for c, size, ok in r[1]]
+
+    def find_item(self, frame, key, min_score=0.5):
+        """В каком слоте предмет key: слот, где он больше всех похож именно на key (а не на
+        другой предмет из папки), с оценкой не ниже min_score. (слот, оценка) или None."""
+        r = self.all_scores(frame)
+        if r is None:
+            return None
+        best = None
+        for j, (sc, _) in enumerate(r[1]):
+            if not sc or max(sc, key=sc.get) != key or sc[key] < min_score:
+                continue
+            if best is None or sc[key] > best[1]:
+                best = (j, sc[key])
+        return best
+
+
+class RodFinder(ItemFinder):
+    """Где в хотбаре удочка. По одной форме иконки удочку не отличить: иконки мелкие, а мечи,
+    кнуты и кирки — такие же диагональные палочки. Но на удочке игра пишет, сколько наживки,
+    а на оружии и инструментах чисел нет. Поэтому сравниваем с картинками удочек только
+    слоты с числом (удочки и стопки), а среди них удочку отличает форма. Слот, который больше
+    похож на известное зелье (others — папка с картинками зелий), удочкой не считаем."""
+
+    def __init__(self, rods_dir, others=None):
+        import os
+        ItemFinder.__init__(self, rods_dir)
+        self.rods = sprites.SpriteSet(rods_dir, names=sprites.ROD_NAMES)
+        if others is None:
+            others = os.path.join(os.path.dirname(os.path.abspath(rods_dir)), "potions")
+        self.others = ItemFinder(others) if others and os.path.isdir(others) else None
+
+    def scores(self, frame):
+        """(номер выбранного слота, [(оценка, удочка, есть ли число), ...] по слотам) или None,
+        если хотбар не виден. Слоты без числа (и похожие на зелья) — оценка 0."""
+        r = self.cells(frame)
+        if r is None:
+            return None
+        out = []
+        for cell, size, ok in r[1]:
+            if not ok:
+                out.append((0.0, None, False))
+                continue
+            sc = self.cell_scores(cell, size)
+            key = max(sc, key=sc.get)
+            if self.others is not None and max(self.others.cell_scores(cell, size).values()) > sc[key]:
+                out.append((0.0, None, True))          # это зелье (или другая известная стопка)
+                continue
+            out.append((sc[key], key, True))
+        return r[0], out
 
     def find(self, frame, min_score=0.45, margin=0.1):
         """Слот с удочкой: (номер слота 0..9, какая удочка, оценка, номер выбранного слота) или None.
