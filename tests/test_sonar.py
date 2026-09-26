@@ -11,6 +11,8 @@ import ocr
 import sonar
 import textimg
 
+RU_OCR = any(lang.startswith("ru") for lang in ocr.available_languages())   # названия в тестах русские
+
 DATA = os.path.join(af.ASSET_DIR, "fishing", "catches.json")
 
 
@@ -67,7 +69,7 @@ class TestRealFont(unittest.TestCase):
     OCR читает их с ошибками, но из известного списка предмет выбирается уверенно — или не
     выбирается вовсе (а не выбирается неправильный)."""
 
-    @unittest.skipUnless(ocr.available_languages(), "нет распознавания текста Windows")
+    @unittest.skipUnless(RU_OCR, "нет русского распознавания текста Windows")
     def test_terraria_font(self):
         import numpy as np
         from helpers import hotbar as hb_img
@@ -141,7 +143,7 @@ class TestFlash(unittest.TestCase):
         self.assertTrue(det.flash)
 
 
-@unittest.skipUnless(ocr.available_languages(), "нет распознавания текста Windows")
+@unittest.skipUnless(RU_OCR, "нет русского распознавания текста Windows")
 class TestReader(unittest.TestCase):
     def setUp(self):
         self.bg = load_bgr("bobber", "029_poisk_shiroko.png", down=4)       # ночь, вода, пирс
@@ -163,7 +165,7 @@ class TestReader(unittest.TestCase):
         self.assertEqual(self.rd.read(self.base.copy()), "")
 
 
-@unittest.skipUnless(ocr.available_languages(), "нет распознавания текста Windows")
+@unittest.skipUnless(RU_OCR, "нет русского распознавания текста Windows")
 class TestSonarFlow(unittest.TestCase):
     def setUp(self):
         self.saved = {n: getattr(af, n) for n in ("SONAR_FILTER", "CATCH_WANT", "CATCH_BIOME", "REEL_DELAY",

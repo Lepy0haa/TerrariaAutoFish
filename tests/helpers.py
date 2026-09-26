@@ -21,6 +21,7 @@ import autofish as af  # noqa: E402
 from pngread import read_png  # noqa: E402
 
 af.SOUND = False
+af.i18n.set_lang("ru")                 # тесты ищут в журнале русские фразы — язык Windows не важен
 af.GAME_NAMES = False                  # названия улова — из списка (как на Вики), а не из установленной игры
 af.log = lambda msg: None              # в тестах не печатаем журнал в консоль
 

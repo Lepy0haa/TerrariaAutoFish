@@ -23,6 +23,16 @@ jobs:
       - name: Install
         run: python -m pip install -r requirements.txt
 
+      - name: Russian text recognition
+        # тестам чтения надписей нужно русское распознавание текста Windows; не вышло — они пропустятся
+        continue-on-error: true
+        timeout-minutes: 15
+        shell: powershell
+        run: |
+          $c = Get-WindowsCapability -Online | Where-Object Name -like 'Language.OCR*ru-RU*'
+          if ($c -and $c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $c.Name | Out-Null }
+          python -c "import ocr; print('OCR:', ocr.available_languages())"
+
       - name: Tests
         run: python -m unittest discover -s tests -v
 
