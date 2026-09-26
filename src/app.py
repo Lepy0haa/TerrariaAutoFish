@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -333,6 +333,9 @@ class App:
         if selftest:
             global SELFTEST
             SELFTEST = True
+            # снимки для README: показательные настройки, а не настройки игрока
+            self.cfg = dict(DEFAULTS, sonar_filter=True, quest_fish=2479, buffs_on=True, buff_fishing=True,
+                            buff_crate=True, buff_sonar=True, stop_after_min=120)
         if lang:
             self.cfg["lang"] = lang
         self.apply_engine_cfg()
@@ -1792,6 +1795,12 @@ class App:
                                     % (tr("видно 31% поплавка"), 12, 6.2), "kind": "good"}))
         self.q.put(("calib", {"ratio": 0.49, "casts": 6, "auto": True}))
         self.q.put(("gear", {"rod_slot": 4, "manual": False, "bobber": "Glowing Fishing Bobber"}))
+        self.q.put(("bait", {"digits": 3, "count": 294}))
+        bass = next((i for i, it in self.catch_data.items.items() if it["en"] == "Bass"), None)             if getattr(self, "catch_data", None) else None
+        if bass is not None:
+            it = self.catch_data.items[bass]
+            self.q.put(("catch", {"id": bass, "name": it["ru"] if i18n.LANG == "ru" else it["en"], "wanted": True,
+                                  "biome": "forest", "caught": True}))
         self.q.put(("live", {"seen": 88, "ref": 110, "ratio": 0.49, "frame": img, "t": 7.4,
                              "max_wait": 45, "flash": False, "auto": True}))
 
