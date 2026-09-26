@@ -4,6 +4,8 @@ import os
 import time
 import unittest
 
+import numpy as np
+
 from helpers import FakeGame, Run, af, load_bgr
 
 import catches
@@ -143,6 +145,37 @@ class TestFlash(unittest.TestCase):
         self.assertTrue(det.flash)
 
 
+class TestLavaBackground(unittest.TestCase):
+    """Над лавой фон всё время «переливается»: раньше это принималось за надпись (она будто висела
+    всегда), и появление настоящей надписи сонара не замечалось."""
+
+    def frames(self):
+        big = load_bgr("bobber", "lava_sonar_region.png", down=2)
+        # та же лава, переливы чуть сдвинуты (на 1 и 2 пикселя)
+        return big[2:-2, 4:-4], big[1:-3, 2:-6]
+
+    def test_shimmer_is_not_text(self):
+        base, shimmer = self.frames()
+        rd = sonar.SonarReader(1.0)
+        rd.set_base(base)
+        self.assertIsNone(rd.extract(shimmer))
+
+    def test_text_over_lava(self):
+        base, shimmer = self.frames()
+        frame = textimg.put_text(shimmer, "Обсидирыба", (230, 90, 60), 150, 60)
+        rd = sonar.SonarReader(1.0)
+        rd.set_base(base)
+        self.assertIsNotNone(rd.extract(frame))
+        y0, y1, x0, x1 = rd.crop(rd.text_mask(frame))
+        self.assertLessEqual(abs(x0 - 150), 6)
+        self.assertLess(y1 - y0, 30)                              # одна строка, а не весь кадр
+        if RU_OCR:
+            c = catches.Catches(DATA)
+            c.use_game_names({"obsidifish": "Обсидирыба"})     # название, как в игре
+            texts = rd.read_all(frame)
+            self.assertEqual(c.identify_any(texts)[0], 2315, texts)
+
+
 @unittest.skipUnless(RU_OCR, "нет русского распознавания текста Windows")
 class TestReader(unittest.TestCase):
     def setUp(self):
@@ -226,7 +259,7 @@ class TestSonarFlow(unittest.TestCase):
             time.sleep(1.5)
             self.game.bite_text, self.game.sonar_now = ("Окунь", (255, 255, 255)), True
             self.assertTrue(r.wait_for(lambda: r.fisher.hooks == 1, 5), r.logs[-4:])        # окунь — подсечка
-            self.assertTrue(any(af.tr("надпись сонара") in l for l in r.logs), r.logs[-4:])
+            self.assertTrue(r.wait_for(lambda: any(af.tr("надпись сонара") in l for l in r.logs), 3), r.logs[-4:])
         finally:
             self.game.sonar_now, self.game.bite_text = False, None
             r.stop()

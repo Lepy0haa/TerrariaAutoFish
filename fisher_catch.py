@@ -110,6 +110,7 @@ class CatchMixin:
         self.n += 1
         if rd.present:
             self.save_dbg("%03d_sonar.png" % self.n, frame, scale=2)
+            self.save_dbg("%03d_sonar_fon.png" % self.n, rd.base, scale=2)    # фон — для разбора
         if rd.last_img is not None:
             self.save_dbg("%03d_sonar_ocr.png" % self.n, np.dstack([rd.last_img] * 3).astype(np.float32))
         if res is None:

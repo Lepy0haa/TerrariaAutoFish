@@ -32,6 +32,9 @@ def prepare(mask, scale=3, thick=False, blur=0):
     return _blur(g, blur).clip(0, 255).astype(np.uint8)
 
 
+NOISY = 300     # изменилось больше стольких пикселей — фон «живой» (лава, волны), чистим его
+
+
 class TextReader:
     def __init__(self, scale=1.0):
         self.s = scale
@@ -52,7 +55,28 @@ class TextReader:
         if exclude is not None:
             x0, y0, x1, y1 = exclude
             changed[max(0, y0):y1, max(0, x0):x1] = False
-        return changed & (frame.max(2) > 90)            # буквы (цвет редкости), а не тень
+        changed &= frame.max(2) > 90                     # буквы (цвет редкости), а не тень
+        if changed.sum() > NOISY:
+            changed = self.not_background(frame, changed)
+        return changed
+
+    def not_background(self, frame, changed):
+        """Фон «живой» (переливы лавы, волны): из изменившихся пикселей оставить те, чьего цвета нет
+        рядом на снимке фона. Перелив — те же цвета, чуть сдвинутые; буквы — новый цвет."""
+        r = max(2, int(round(3 * self.s)))
+        ys, xs = np.nonzero(changed)
+        h, w = changed.shape
+        px = frame[ys, xs]
+        best = np.full(len(ys), np.inf)
+        for dy in range(-r, r + 1):
+            yy = np.clip(ys + dy, 0, h - 1)
+            for dx in range(-r, r + 1):
+                d = np.abs(px - self.base[yy, np.clip(xs + dx, 0, w - 1)]).max(1)
+                np.minimum(best, d, out=best)
+        keep = best > 40
+        out = np.zeros_like(changed)
+        out[ys[keep], xs[keep]] = True
+        return out
 
     def crop(self, mask):
         """Строка надписи: самая «плотная» полоса строк маски. (y0, y1, x0, x1) или None, если это
