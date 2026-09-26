@@ -345,8 +345,8 @@ EN = {
     "Потом выключить компьютер (через 60 с)": "Then shut down the computer (in 60 s)",
     # обновления, трей, мастер первого запуска
     "Вышла новая версия %s — %s": "New version %s is out — %s",
-    "Вышла новая версия %s. Скачать — на странице релиза на GitHub.":
-        "New version %s is out. Download it from the release page on GitHub.",
+    "Вышла новая версия %s. Обновить — кнопкой на вкладке «Настройки».":
+        "New version %s is out. Update it with the button on the Settings tab.",
     "Показать окно": "Show window",
     "Пауза / продолжить": "Pause / resume",
     "Как начать": "Getting started",
@@ -498,6 +498,13 @@ EN = {
     "сегодня": "today",
     "7 дней": "7 days",
     "всё время": "all time",
+    "Обновить до %s": "Update to %s",
+    "Скачать и установить версию %s?\n\nПрограмма закроется, а установщик обновит её (настройки и точки сохранятся).": "Download and install version %s?\n\nThe program will close and the installer will update it (settings and points are kept).",
+    "Обновление — рыбалка остановлена.": "Updating — fishing stopped.",
+    "Скачиваю версию %s…": "Downloading version %s…",
+    "Не удалось скачать обновление: %s": "Couldn't download the update: %s",
+    "Не удалось запустить установщик: %r": "Couldn't start the installer: %r",
+    "Скачиваю… %d%%": "Downloading… %d%%",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

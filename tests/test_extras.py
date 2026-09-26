@@ -22,9 +22,9 @@ class TestUpdates(unittest.TestCase):
     def test_newer(self):
         old = updates.latest
         try:
-            updates.latest = lambda timeout=10: ("v9.0.0", "https://example/r")
-            self.assertEqual(updates.newer("1.3.2"), ("9.0.0", "https://example/r"))
-            updates.latest = lambda timeout=10: ("v1.3.2", "https://example/r")
+            updates.latest = lambda timeout=10: ("v9.0.0", "https://example/r", None)
+            self.assertEqual(updates.newer("1.3.2"), ("9.0.0", "https://example/r", None))
+            updates.latest = lambda timeout=10: ("v1.3.2", "https://example/r", None)
             self.assertIsNone(updates.newer("1.3.2"))
         finally:
             updates.latest = old
@@ -105,6 +105,25 @@ class TestPickupStacks(unittest.TestCase):
             restore()
             for n, v in saved.items():
                 setattr(af, n, v)
+
+
+class TestDownload(unittest.TestCase):
+    def test_download_checks_size(self):
+        import tempfile
+        import updates
+        src = os.path.join(tempfile.mkdtemp(), "src.bin")
+        with open(src, "wb") as fh:
+            fh.write(b"x" * 100000)
+        url = "file:///" + src.replace("\\", "/")
+        out = tempfile.mkdtemp()
+        seen = []
+        path = updates.download({"name": "TerrariaAutoFish-9.0.0-setup.exe", "url": url, "size": 100000},
+                                out, seen.append)
+        self.assertEqual(os.path.getsize(path), 100000)
+        self.assertAlmostEqual(seen[-1], 1.0)
+        with self.assertRaises(IOError):                   # недокачано — файла нет
+            updates.download({"name": "bad-setup.exe", "url": url, "size": 123}, out)
+        self.assertFalse(os.path.exists(os.path.join(out, "bad-setup.exe")))
 
 
 class TestHistory(unittest.TestCase):

@@ -353,6 +353,7 @@ class App:
         self.absent = []                  # каких нужных зелий нет в хотбаре
         self.tray = None                  # значок в трее
         self.update_url = None
+        self.update_info = None           # (версия, страница, установщик) — если вышла новая версия
         self.calib = {"ratio": af.SINK_RATIO, "casts": 0, "auto": af.AUTO_CALIB}
         self.fisher = None
 
@@ -698,8 +699,9 @@ class App:
             APP, tr("Так выглядят уведомления программы"))).pack(side="left")
         # всё для разбора проблемы — одним архивом: журнал, настройки, отладочные картинки
         ttk.Button(bf, text=tr("Собрать отчёт"), command=self.make_report).pack(side="right")
-        ttk.Button(bf, text=tr("Обновления"), command=lambda: self.check_updates(force=True)).pack(
-            side="right", padx=(0, 6))
+        self.update_btn = ttk.Button(bf, text=tr("Обновления"), command=self.on_update_btn)
+        self.update_btn.pack(side="right", padx=(0, 6))
+        self.show_update_btn()
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -1425,6 +1427,11 @@ class App:
             self.on_tray(d["cmd"])
         elif kind == "update":
             self.on_update(d)
+        elif kind == "update_progress":
+            self.update_btn.config(text=tr("Скачиваю… %d%%") % round(100 * d["p"]))
+        elif kind == "update_ready":
+            self.show_update_btn()
+            self.on_update_ready(d)
         elif kind == "hb_test":
             self.show_hb(d["text"])
         elif kind == "buff_test":
@@ -1556,17 +1563,71 @@ class App:
             if d["force"]:
                 self.add_log(tr("У вас последняя версия (%s).") % VERSION, "good")
             return
-        version, url = found
+        version, url, setup = found
         self.update_url = url
+        self.update_info = found
+        self.show_update_btn()
         self.root.title("%s %s — %s" % (APP, VERSION, tr("доступна %s") % version))
         self.add_log(tr("Вышла новая версия %s — %s") % (version, url), "good")
         if self.cfg["toasts"]:
-            toast(APP, tr("Вышла новая версия %s. Скачать — на странице релиза на GitHub.") % version)
+            toast(APP, tr("Вышла новая версия %s. Обновить — кнопкой на вкладке «Настройки».") % version)
         if d["force"]:
+            self.install_update()
+
+    def show_update_btn(self):
+        btn = getattr(self, "update_btn", None)
+        if btn is not None and btn.winfo_exists():
+            btn.config(text=tr("Обновить до %s") % self.update_info[0] if self.update_info else tr("Обновления"))
+
+    def on_update_btn(self):
+        if self.update_info:
+            self.install_update()
+        else:
+            self.check_updates(force=True)
+
+    def install_update(self):
+        """Обновление в один клик: скачать установщик новой версии, запустить его и закрыться (иначе
+        он не сможет заменить файлы программы). Портативной версии установщик не нужен — откроем
+        страницу релиза."""
+        from tkinter import messagebox
+        version, url, setup = self.update_info
+        if PORTABLE or setup is None or getattr(self, "updating", False):
             try:
                 os.startfile(url)
             except Exception:
                 pass
+            return
+        if not messagebox.askyesno(APP, tr("Скачать и установить версию %s?\n\nПрограмма закроется, а "
+                                           "установщик обновит её (настройки и точки сохранятся).") % version,
+                                   parent=self.root):
+            return
+        self.updating = True
+        self.fisher.stop_fishing(tr("Обновление — рыбалка остановлена."), notify=False)
+        self.add_log(tr("Скачиваю версию %s…") % version)
+
+        def work():
+            import tempfile
+            import updates
+            try:
+                path = updates.download(setup, os.path.join(tempfile.gettempdir(), "TerrariaAutoFish-update"),
+                                        lambda p: self.q.put(("update_progress", {"p": p})))
+            except Exception as e:
+                self.q.put(("update_ready", {"error": repr(e)}))
+                return
+            self.q.put(("update_ready", {"path": path}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_update_ready(self, d):
+        self.updating = False
+        if d.get("error"):
+            self.add_log(tr("Не удалось скачать обновление: %s") % d["error"], "bad")
+            return
+        try:
+            subprocess.Popen([d["path"]], close_fds=True)
+        except Exception as e:
+            self.add_log(tr("Не удалось запустить установщик: %r") % e, "bad")
+            return
+        self.close()                              # установщик заменит файлы, пока программа закрыта
 
     # ---------- журнал в файл и отчёт ----------
     def write_log_file(self, text, kind="info"):
