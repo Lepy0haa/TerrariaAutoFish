@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.5"
+VERSION = "1.2.6"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -40,6 +40,8 @@ DEFAULTS = {
     "lang": "auto", "auto_calib": True, "auto_recover": True, "auto_resume": True,
     "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b",
     "auto_rod": True, "auto_mark": True, "rod_slot": "auto",
+    "buff_sonar": False, "buff_calm": False, "health_guard": True, "bait_watch": True,
+    "stop_after_min": 0, "stop_after_hooks": 0, "shutdown_after": False,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -158,7 +160,25 @@ def load_cfg():
     return cfg
 
 
+SELFTEST = False                           # самопроверка сборки: настройки игрока не трогаем
+
+
+def ghost(win):
+    """Окно самопроверки: невидимое, клики проходят сквозь него, фокус не забирает. Пока идёт
+    самопроверка, игрок может рыбачить: окно не должно мешать ни игре, ни кликам рыбалки."""
+    try:
+        u = ctypes.windll.user32
+        hwnd = u.GetParent(win.winfo_id()) or win.winfo_id()
+        ex = u.GetWindowLongW(hwnd, -20)
+        u.SetWindowLongW(hwnd, -20, ex | 0x80000 | 0x20 | 0x08000000)   # LAYERED | TRANSPARENT | NOACTIVATE
+        win.attributes("-alpha", 0.0)
+    except Exception:
+        pass
+
+
 def save_cfg(cfg):
+    if SELFTEST:
+        return
     try:
         os.makedirs(CFG_DIR, exist_ok=True)
         with open(CFG_PATH, "w", encoding="utf-8") as f:
@@ -227,6 +247,8 @@ class Overlay(tk.Toplevel):
         if not pos:
             pos = (20, self.winfo_screenheight() - 170)
         self.geometry("+%d+%d" % tuple(pos))
+        if app.selftest:
+            self.after(1, lambda: ghost(self))
         self.after(50, self.no_activate)
 
     def no_activate(self):
@@ -259,6 +281,9 @@ class App:
     def __init__(self, selftest=None, lang=None):
         self.cfg = load_cfg()
         self.selftest = selftest
+        if selftest:
+            global SELFTEST
+            SELFTEST = True
         if lang:
             self.cfg["lang"] = lang
         self.apply_engine_cfg()
@@ -268,10 +293,15 @@ class App:
         self.state = "idle"
         self.countdown = 0
         self.log_lines = []               # (время, текст, тип) — чтобы пересоздать журнал при смене языка
+        self.gear = {"rod_slot": None, "manual": False, "bobber": None}
+        self.bait = None                  # сколько цифр наживки видно на удочке
         self.calib = {"ratio": af.SINK_RATIO, "casts": 0, "auto": af.AUTO_CALIB}
         self.fisher = None
 
+        prev_fg = ctypes.windll.user32.GetForegroundWindow()
         self.root = tk.Tk()
+        if selftest:
+            self.root.attributes("-alpha", 0.0)   # самопроверка невидима — см. ghost()
         self.root.title("%s %s" % (APP, VERSION))
         self.root.configure(bg=C["bg"])
         self.root.resizable(True, True)
@@ -281,6 +311,8 @@ class App:
         self.build()
         self.root.after(10, self.dark_titlebar)
         self.place_window()
+        if selftest:
+            self.root.after(1, lambda: (ghost(self.root), ctypes.windll.user32.SetForegroundWindow(prev_fg)))
 
         self.fisher = af.Fisher(debug=self.cfg["debug"], record=self.cfg["record"],
                                 events=lambda k, d: self.q.put((k, d)), toggle_key=self.cfg["hotkey"],
@@ -289,8 +321,12 @@ class App:
         self.fisher.set_scale(self.cfg["scale"])
         self.overlay = None
         self.toggle_overlay()
-        self.start_log_file()
-        self.fisher.start()
+        if selftest:
+            # самопроверка не слушает клавиши и мышь (HOME в игре не должен запускать её рыбалку)
+            self.fisher.state("idle", tr("Готов"), self.fisher.idle_hint())
+        else:
+            self.start_log_file()
+            self.fisher.start()
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.root.after(50, self.pump)
@@ -304,7 +340,10 @@ class App:
             self.root.after(3200, lambda: self.snapshot(selftest.replace(".png", "_settings.png"),
                                                         close=False, overlay=False))
             self.root.after(3400, lambda: self.nb.select(2))
-            self.root.after(3800, lambda: self.snapshot(selftest.replace(".png", "_auto.png"), overlay=False))
+            self.root.after(3800, lambda: self.snapshot(selftest.replace(".png", "_auto.png"),
+                                                        close=False, overlay=False))
+            self.root.after(4000, lambda: self.nb.select(3))
+            self.root.after(4400, lambda: self.snapshot(selftest.replace(".png", "_away.png"), overlay=False))
 
     def place_window(self):
         """Открыть окно там, где его оставили, но не за краем экрана."""
@@ -321,8 +360,9 @@ class App:
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             on = ctypes.c_int(1)
             ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))
-            self.root.withdraw()
-            self.root.deiconify()   # чтобы Windows перерисовал заголовок
+            if not self.selftest:   # самопроверка не должна забирать фокус у игры
+                self.root.withdraw()
+                self.root.deiconify()   # чтобы Windows перерисовал заголовок
         except Exception:
             pass
 
@@ -337,7 +377,12 @@ class App:
         af.ROD_SLOT = (int(slot) - 1) % 10 if slot.isdigit() else None
         af.AUTO_MARK = bool(self.cfg["auto_mark"])
         af.BUFFS_ON = bool(self.cfg["buffs_on"])
-        af.BUFF_WANT = {"fishing": bool(self.cfg["buff_fishing"]), "crate": bool(self.cfg["buff_crate"])}
+        af.BUFF_WANT = {n: bool(self.cfg["buff_" + n]) for n in ("fishing", "crate", "sonar", "calm")}
+        af.HEALTH_GUARD = bool(self.cfg["health_guard"])
+        af.BAIT_WATCH = bool(self.cfg["bait_watch"])
+        af.STOP_AFTER_MIN = int(self.cfg["stop_after_min"])
+        af.STOP_AFTER_HOOKS = int(self.cfg["stop_after_hooks"])
+        af.SHUTDOWN_AFTER = bool(self.cfg["shutdown_after"])
         af.BUFF_KEY = self.cfg["buff_key"]
         af.SINK_RATIO = float(self.cfg["sink_ratio"])
         af.MAX_WAIT = float(self.cfg["max_wait"])
@@ -411,9 +456,12 @@ class App:
         nb.add(main, text=tr(" Рыбалка "))
         nb.add(sett, text=tr(" Настройки "))
         nb.add(auto, text=tr(" Автоматика "))
+        away = ttk.Frame(nb, padding=(0, 6, 0, 0))
+        nb.add(away, text=tr(" Без присмотра "))
         self.build_main(main)
         self.build_settings(sett)
         self.build_auto(auto)
+        self.build_away(away)
 
     def build_main(self, p):
         top = ttk.Frame(p)
@@ -613,8 +661,14 @@ class App:
 
         ttk.Label(box, text=tr("Зелья"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
         check("buffs_on", tr("Следить за баффами и пить зелья, когда бафф закончился"))
-        check("buff_fishing", tr("Зелье рыбалки (бафф «Рыбалка»)"), pad=22)
-        check("buff_crate", tr("Ящичное зелье (бафф «Ящики»)"), pad=22)
+        grid = ttk.Frame(box, style="Card.TFrame")
+        grid.pack(fill="x", padx=(22, 0))
+        for i, (key, text) in enumerate((("buff_fishing", tr("Рыбалка")), ("buff_crate", tr("Ящики")),
+                                         ("buff_sonar", tr("Сонар")), ("buff_calm", tr("Спокойствие")))):
+            var = tk.BooleanVar(value=bool(self.cfg[key]))
+            ttk.Checkbutton(grid, text=text, variable=var,
+                            command=lambda k=key, v=var: self.set_auto_opt(k, v.get())).grid(
+                row=i // 2, column=i % 2, sticky="w", padx=(0, 30))
         row = ttk.Frame(box, style="Card.TFrame")
         row.pack(fill="x", pady=(6, 0))
         ttk.Label(row, text=tr("Клавиша быстрого баффа (как в игре)"), style="Card.TLabel").pack(side="left")
@@ -633,6 +687,65 @@ class App:
                                        style="Muted.TLabel", wraplength=390, justify="left")
         self.buff_test_lbl.pack(anchor="w", pady=(4, 0))
 
+    def build_away(self, p):
+        """Вкладка «Без присмотра»: защита персонажа, наживка, когда закончить рыбалку."""
+        box = self.card(p, fill="both", expand=True)
+
+        def check(key, text):
+            var = tk.BooleanVar(value=bool(self.cfg[key]))
+            ttk.Checkbutton(box, text=text, variable=var,
+                            command=lambda: self.set_auto_opt(key, var.get())).pack(anchor="w")
+
+        def note(text):
+            ttk.Label(box, text=text, style="Muted.TLabel", wraplength=390, justify="left").pack(
+                anchor="w", padx=(22, 0))
+
+        ttk.Label(box, text=tr("Защита"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
+        check("health_guard", tr("Персонаж получает урон — вытащить поплавок и встать на паузу"))
+        note(tr("Смотрит на сердечки здоровья справа вверху: стало меньше — сообщит и остановится."))
+        check("bait_watch", tr("Следить за наживкой"))
+        note(tr("Меньше 10 — предупредит, кончилась — сразу остановится (без повторных попыток)."))
+        ttk.Separator(box).pack(fill="x", pady=8)
+
+        ttk.Label(box, text=tr("Когда закончить"), style="Card.TLabel", font=(FONT, 9, "bold")).pack(anchor="w")
+
+        def spin(key, text, top):
+            row = ttk.Frame(box, style="Card.TFrame")
+            row.pack(fill="x", pady=(2, 0))
+            ttk.Label(row, text=text, style="Card.TLabel").pack(side="left")
+            var = tk.IntVar(value=int(self.cfg[key]))
+
+            def save(*_):
+                try:
+                    v = max(0, min(top, int(var.get())))
+                except (tk.TclError, ValueError):
+                    v = 0
+                var.set(v)
+                self.set_auto_opt(key, v)
+            sp = ttk.Spinbox(row, from_=0, to=top, increment=10 if top > 100 else 5, textvariable=var,
+                             width=8, command=save)
+            sp.pack(side="right")
+            sp.bind("<FocusOut>", save)
+            sp.bind("<Return>", save)
+        spin("stop_after_min", tr("Остановиться через, мин"), 1440)
+        spin("stop_after_hooks", tr("…или после стольких подсечек"), 100000)
+        note(tr("0 — не останавливаться. Время и подсечки — как в статистике на вкладке «Рыбалка»."))
+        check("shutdown_after", tr("После такой остановки выключить компьютер"))
+        note(tr("Через 60 с после остановки; отменить можно кнопкой ниже."))
+        row = ttk.Frame(box, style="Card.TFrame")
+        row.pack(fill="x", pady=(8, 0))
+        self.cancel_btn = ttk.Button(row, text=tr("Отменить выключение"), command=self.cancel_shutdown)
+        self.cancel_btn.pack(side="left")
+        self.cancel_btn.state(["disabled"])
+
+    def cancel_shutdown(self):
+        try:
+            af.cancel_shutdown()
+            self.add_log(tr("Выключение компьютера отменено."), "good")
+        except Exception as e:
+            self.add_log(tr("Не получилось отменить выключение: %r") % e, "bad")
+        self.cancel_btn.state(["disabled"])
+
     def set_auto_opt(self, key, value):
         self.cfg[key] = value
         save_cfg(self.cfg)
@@ -645,17 +758,20 @@ class App:
             self.fisher.gear_changed()
 
     def buff_text(self, status):
-        names = {"fishing": tr("рыбалки"), "crate": tr("ящиков")}
+        names = {"fishing": tr("рыбалки"), "crate": tr("ящиков"), "sonar": tr("сонара"), "calm": tr("спокойствия")}
         parts = ["%s %s" % (names[n], "✓" if ok else "✗") for n, ok in status.items()]
         return tr("Зелья: ") + " · ".join(parts)
 
     def show_gear(self, d):
+        self.gear = d
         parts = []
         if d.get("rod_slot") is not None:
             parts.append(tr("Удочка: слот %d") % ((d["rod_slot"] + 1) % 10) +
                          (tr(" (задан)") if d.get("manual") else ""))
         if d.get("bobber"):
             parts.append(tr("поплавок: %s") % d["bobber"])
+        if self.bait is not None and self.cfg["bait_watch"]:
+            parts.append(tr("наживка: %s") % {0: tr("нет"), 1: tr("меньше 10"), 2: "10–99"}.get(self.bait, "100+"))
         self.gear_lbl.config(text=" · ".join(parts))
         if parts:                          # пустую строку не показываем — окно не растёт зря
             self.gear_lbl.pack(anchor="w")
@@ -897,6 +1013,14 @@ class App:
             self.show_buffs(d["status"])
         elif kind == "gear":
             self.show_gear(d)
+        elif kind == "bait":
+            self.bait = d["digits"]
+            self.show_gear(self.gear)
+        elif kind == "shutdown":
+            self.cancel_btn.state(["!disabled"] if d["seconds"] else ["disabled"])
+            if d["seconds"] and self.cfg["toasts"]:
+                toast(tr("Выключение компьютера"),
+                      tr("Рыбалка закончена. Компьютер выключится через %d с.") % d["seconds"])
         elif kind == "hb_test":
             self.show_hb(d["text"])
         elif kind == "buff_test":

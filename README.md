@@ -13,6 +13,7 @@ memory or files, so it does not depend on the game version.
   <img src="docs/main-en.png" width="280" alt="Main window">
   <img src="docs/settings-en.png" width="280" alt="Settings">
   <img src="docs/automation-en.png" width="280" alt="Automation">
+  <img src="docs/away-en.png" width="280" alt="Unattended">
 </p>
 
 ## Features
@@ -33,8 +34,11 @@ memory or files, so it does not depend on the game version.
   when you return to the game from another window, it resumes by itself.
 - **Finds a lost bobber** — if the bobber lands off to the side, the program searches around the
   place you marked and remembers the new spot. Works at night and in caves too.
-- **Potions** — watches the Fishing and Crate buffs and drinks potions (with Quick Buff) when a buff
-  ends. Tells you when you run out of potions.
+- **Potions** — watches the Fishing, Crate, Sonar and Calm buffs and drinks potions (with Quick
+  Buff) when a buff ends. Tells you when you run out of potions.
+- **Unattended fishing** — if the character takes damage, reels in and pauses; warns when bait is
+  running low and stops as soon as it's gone; stops after the chosen time or number of hooks and
+  can shut the computer down.
 - **Ignores distractions** — waves, rain, fish shadows, pets, cursor sparkles, lightning flashes.
 - **Clear interface** — what's happening now and what you need to do, a live picture of the
   bobber, stats, an event log, a small window over the game and Windows notifications.
@@ -114,12 +118,21 @@ does not take focus away from the game.
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop but waits 3, 10, then 20 s, goes back to the original mark and tries again. It pauses only if all attempts fail |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
-| Watch buffs and drink potions | Every 20 s the program looks for the Fishing and Crate buff icons (top left). If a buff is gone, it presses **Quick Buff** (B by default) and checks that the buff is back. If not — "out of potions?" notification |
+| Watch buffs and drink potions | Every 20 s the program looks for the chosen buff icons (Fishing, Crate, Sonar, Calm; top left). If a buff is gone, it presses **Quick Buff** (B by default) and checks that the buff is back. If not — "out of potions?" notification |
 | Quick Buff key | Same as in Terraria's controls |
 | Check buffs now | Shows which buffs the program sees right now (the game must be visible) |
 
 Quick Buff drinks every buff potion in the inventory whose buff is not active and never wastes a
 potion whose buff is still running — keep only the potions you need in the inventory.
+
+### Unattended tab
+
+| Setting | What it does |
+|---|---|
+| The character takes damage — reel in and pause | Twice a second the program looks at the health hearts (top right). If there are noticeably fewer of them (8% — about 2 hearts of 20) on two checks in a row, it reels in, pauses and sends a notification. Health regeneration is not a problem: the program compares with the highest level it has seen |
+| Watch the bait | The game writes the bait count on the fishing rod. The digits are too small to read them reliably, but the number of digits is visible: less than 10 — a notification; no number — out of bait: the program stops right away instead of retrying |
+| Stop after, min / …or after this many hooks | 0 — don't stop. Time and hooks are counted as in the stats on the Fishing tab. When the limit is reached, the program reels in and stops |
+| Shut down the computer after such a stop | 60 s after the stop; the "Cancel shutdown" button (or `shutdown /a`) cancels it |
 
 Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable version: in the
 `settings` folder next to the program).
@@ -146,8 +159,13 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
    Detection works 0.3 s after watching starts. Frames with a lightning flash are skipped. The bar
    shows the lowest value between its updates, so even a short dip of the bobber is visible.
 4. **Auto-calibration.** While waiting, the program measures how much the bobber "sinks" on waves
-   and in rain. The threshold is set just below that level (median of the last 8 casts minus 15%,
-   within 35–80%); on the very first cast — from the first second of calm water of that cast.
+   and in rain (the first 0.6 s after landing, when the bobber still sways, are not counted). The
+   threshold is set 15% below that level (a steady level, not the single lowest frame), within
+   55–80%: bites often pull the bobber down only to 50–75%. During every cast the threshold is also
+   raised on the fly from the calm water of that cast (only raised — small twitches before a bite
+   don't lower it). Besides the threshold, a **sharp dip** is a bite too: if the bobber suddenly
+   (within 0.25 s) loses a quarter of its visible part and stays down, it is hooked even if the
+   threshold was not reached.
 5. **Buffs.** Buff icons are drawn semi-transparent over the background, so they are recognized by
    normalized correlation (it doesn't depend on brightness or tint), at any interface scale.
 6. **Hotbar.** The selected hotbar slot is the bright yellow one; its position gives the slot number.
@@ -156,6 +174,9 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
    fishing rod, and weapons and tools have no numbers. So only slots with a number (rods, stacks
    like potions) are compared with the Wiki rod images, drawn the way the game draws them
    (smoothly scaled, centered, ignoring the digits). The slot of a successful cast is remembered.
+7. **Health.** Heart pixels (red) are counted in the band of heart rows at the top right; red things
+   on the minimap below are not counted. The game removes health from the last heart, so any damage
+   reduces the count.
 
 ## Troubleshooting
 

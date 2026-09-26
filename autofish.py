@@ -64,7 +64,14 @@ FLASH_DIFF = 40       # небо резко сменило цвет (молни�
 MAX_FAILS = 3         # столько неудачных забросов подряд -> пауза (кончилась наживка?)
 AUTO_CALIB = True     # автокалибровка: порог подсечки подбирается сам по тому, как качается поплавок
 CALIB_MARGIN = 0.15   #   порог = «спокойный минимум» (сколько поплавка видно на волнах) минус столько
-CALIB_MAX = 0.8       #   ...но не выше этого (и не ниже 0.35)
+CALIB_MAX = 0.8       #   ...но не выше этого
+CALIB_MIN = 0.55      #   ...и не ниже этого: поклёвки часто уводят поплавок только до 50–75 %
+CALIB_SKIP = 0.6      #   первые столько секунд слежения поплавок ещё покачивается после приводнения —
+                      #   для калибровки их не берём
+CALIB_PCT = 10        #   «спокойный минимум» — такой процентиль (а не самый низкий кадр)
+JUMP_DROP = 0.25      # поклёвка ещё и так: поплавок резко (за JUMP_WINDOW с) потерял столько
+JUMP_WINDOW = 0.25    #   своей видимой части — даже если до порога подсечки не дошёл
+JUMP_CONFIRM = 2      #   ...и так на стольких снимках подряд
 CALIB_MIN_CASTS = 1   #   после стольких забросов порог подбирается по прошлым забросам
 CALIB_NOW = 1.0       #   а до того — по текущему: через столько секунд спокойной воды
 
@@ -74,7 +81,7 @@ AUTO_RESUME = True    # пауза из-за переключения в дру�
 RESUME_AFTER = 2.0    #   ...через столько секунд в игре
 
 BUFFS_ON = False      # следить за зельями и пить их (клавишей быстрого баффа)
-BUFF_WANT = {"fishing": True, "crate": True}   # какие баффы держать
+BUFF_WANT = {"fishing": True, "crate": True, "sonar": False, "calm": False}   # какие баффы держать
 BUFF_KEY = "b"        # клавиша быстрого баффа в Terraria (по умолчанию B)
 BUFF_CHECK_EVERY = 20.0   # как часто проверять баффы, секунд
 BUFF_BACKOFF = 300.0  # если выпить не получилось (кончились зелья) — не пробовать столько секунд
@@ -84,6 +91,14 @@ SPRITE_MIN = 0.75     # насколько картинка на экране д
 ROD_SLOT = None       # слот удочки: None — запоминать самому (по удачному забросу), 0..9 — задан вручную
 ROD_HINT_MIN = 0.45       # пока слот неизвестен: удочка — слот с числом наживки, похожий на удочку хотя бы так
 ROD_HINT_MARGIN = 0.1     # ...и лучше других слотов с числом (зелья, стопки) хотя бы на столько
+HEALTH_GUARD = True   # персонаж получает урон — вытащить поплавок и встать на паузу
+HEALTH_DROP = 0.08    #   урон — когда сердечек стало меньше на эту долю (одно сердце из 20 — 5 %)
+HEALTH_EVERY = 0.5    #   как часто смотреть на сердечки, секунд
+BAIT_WATCH = True     # следить за наживкой: мало — предупредить, кончилась — остановиться
+STOP_AFTER_MIN = 0    # остановиться через столько минут рыбалки (0 — не останавливаться)
+STOP_AFTER_HOOKS = 0  # ...или после стольких подсечек (0 — не останавливаться)
+SHUTDOWN_AFTER = False    # после такой остановки выключить компьютер (через SHUTDOWN_DELAY секунд)
+SHUTDOWN_DELAY = 60
 SOUND = True          # пищать при старте, отметке, паузе
 # ==================================================================
 
@@ -141,15 +156,46 @@ def click(x, y, hold=0.06):
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 
+def window_exe(hwnd):
+    """Имя .exe процесса, которому принадлежит окно (в нижнем регистре), и его pid."""
+    pid = wt.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    name = ""
+    h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if h:
+        try:
+            buf = ctypes.create_unicode_buffer(520)
+            size = wt.DWORD(520)
+            if ctypes.windll.kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                name = os.path.basename(buf.value).lower()
+        finally:
+            ctypes.windll.kernel32.CloseHandle(h)
+    return name, pid.value
+
+
+def is_game_window(hwnd):
+    """Окно самой игры: Terraria или tModLoader. Не окна этой программы («Terraria AutoFish»
+    тоже начинается с «Terraria») и не консоль сервера."""
+    buf = ctypes.create_unicode_buffer(256)
+    user32.GetWindowTextW(hwnd, buf, 256)
+    if not looks_like_game(buf.value, "", 0):
+        return False                          # по заголовку — точно не игра (процесс не проверяем)
+    exe, pid = window_exe(hwnd)
+    return looks_like_game(buf.value, exe, pid)
+
+
+def looks_like_game(title, exe, pid):
+    """По заголовку окна, имени .exe и pid: игра ли это (Terraria / tModLoader)."""
+    title = title.lower()
+    if not (title.startswith("terraria") or title.startswith("tmodloader")) or "autofish" in title:
+        return False
+    return not (pid == os.getpid() or "server" in exe or "autofish" in exe)
+
+
 def terraria_window():
     """hwnd активного окна, если это Terraria / tModLoader, иначе None."""
     hwnd = user32.GetForegroundWindow()
-    if not hwnd:
-        return None
-    buf = ctypes.create_unicode_buffer(256)
-    user32.GetWindowTextW(hwnd, buf, 256)
-    title = buf.value.lower()
-    if title.startswith("terraria") or title.startswith("tmodloader"):
+    if hwnd and is_game_window(hwnd):
         return hwnd
     return None
 
@@ -356,7 +402,49 @@ def press_key(name):
     user32.keybd_event(vk, sc, 2, 0)
 
 
-BUFF_NAMES = {"fishing": "зелье рыбалки", "crate": "ящичное зелье"}
+BUFF_NAMES = {"fishing": "зелье рыбалки", "crate": "ящичное зелье", "sonar": "зелье сонара",
+              "calm": "успокоительное зелье"}
+
+
+def schedule_shutdown(seconds):
+    """Выключить компьютер через seconds секунд (отменить: cancel_shutdown или shutdown /a)."""
+    import subprocess
+    subprocess.Popen(["shutdown", "/s", "/t", str(int(seconds)), "/c", "Terraria AutoFish"],
+                     creationflags=0x08000000)
+
+
+def cancel_shutdown():
+    import subprocess
+    subprocess.Popen(["shutdown", "/a"], creationflags=0x08000000)
+
+
+def heart_mask(img):
+    """Пиксели сердечек здоровья (красные) на кадре BGR."""
+    b, g, r = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+    return (r > 170) & (g < 100) & (b < 120) & (r - g > 110)
+
+
+def heart_rows(mask):
+    """Полоса строк с сердечками: ряды сердечек (их бывает два) — до промежутка больше высоты
+    ряда; ниже бывает мини-карта, там тоже встречается красное. (y0, y1) или None."""
+    rows = mask.sum(1)
+    full = np.nonzero(rows > 5)[0]
+    if not len(full):
+        return None
+    y0 = int(full[0])
+    y = y0
+    while y < len(rows) and rows[y] >= 2:            # первый ряд сердечек
+        y += 1
+    height = max(6, y - y0)
+    y1, gap = y - 1, 0
+    for y in range(y, len(rows)):
+        if rows[y] >= 2:
+            y1, gap = y, 0
+        else:
+            gap += 1
+            if gap > height:
+                break
+    return max(0, y0 - 2), y1 + 3
 
 
 def BUFF_THRESHOLD():
@@ -370,10 +458,7 @@ def find_terraria():
 
     @ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
     def each(hwnd, _):
-        buf = ctypes.create_unicode_buffer(256)
-        user32.GetWindowTextW(hwnd, buf, 256)
-        t = buf.value.lower()
-        if user32.IsWindowVisible(hwnd) and (t.startswith("terraria") or t.startswith("tmodloader")):
+        if user32.IsWindowVisible(hwnd) and is_game_window(hwnd):
             found.append(hwnd)
         return True
     user32.EnumWindows(each, 0)
@@ -405,6 +490,11 @@ class BiteDetector:
         self.sky = None                 # обычный цвет неба — чтобы узнавать вспышки молний
         self.flash = False
         self.ratio = SINK_RATIO         # порог подсечки (автокалибровка может его менять)
+        self.jumps = 0                  # снимков подряд с резким нырком
+        self.auto = False               # подстраивать порог на лету (автокалибровка)
+        self.calm = []                  # (t, доля видимого поплавка) — для автокалибровки
+        self.last_calib = 0.0
+        self.raised = False             # порог только что подняли (для журнала)
         self.last_dbg = -1.0
 
     def visible(self, frame):
@@ -431,13 +521,32 @@ class BiteDetector:
         if t < CALIB_TIME or not old:
             return None
         self.ref = float(np.median(old))
+        self.calm.append((t, self.seen / self.ref))
+        if self.auto and t >= CALIB_NOW and t - self.last_calib >= 0.5:
+            # подстройка на лету: по спокойной воде этого заброса (без покачивания после
+            # приводнения и без последних 0.4 с) порог поднимается до «спокойно минус запас».
+            # Только вверх: лёгкие подёргивания перед поклёвкой не должны его опускать
+            self.last_calib = t
+            steady = [r for tt, r in self.calm if CALIB_SKIP <= tt < t - 0.4]
+            if len(steady) >= 15:
+                live = float(np.clip(np.percentile(steady, CALIB_PCT) - CALIB_MARGIN, CALIB_MIN, CALIB_MAX))
+                if live > self.ratio + 0.01:
+                    self.ratio = live
+                    self.raised = True
         sunk = self.seen < self.ref * self.ratio
         self.hits = self.hits + 1 if sunk else 0
+        # резкий нырок: только что было видно намного больше (поплавок дёрнуло вниз)
+        recent = [v for tt, v in self.hist if t - JUMP_WINDOW <= tt < t - 0.03]
+        jump = (t >= 0.4 and recent and self.seen < max(recent) * (1 - JUMP_DROP)
+                and self.seen < self.ref * 0.9)
+        self.jumps = self.jumps + 1 if jump else 0
         if self.debug and t - self.last_dbg > 0.25:
             log(tr("  видно поплавка: %d (обычно %.0f, порог %.0f)") % (self.seen, self.ref, self.ref * self.ratio))
             self.last_dbg = t
         if self.hits >= CONFIRM:
             return tr("видно %d%% поплавка") % (100 * self.seen / max(1.0, self.ref))
+        if self.jumps >= JUMP_CONFIRM:
+            return tr("резкий нырок, видно %d%% поплавка") % (100 * self.seen / max(1.0, self.ref))
         return None
 
 
@@ -452,6 +561,8 @@ class Fisher:
       calib    {ratio, casts, auto}           — порог подсечки (автокалибровка)
       buffs    {status}                       — какие баффы есть: {"fishing": True, ...}
       gear     {rod_slot, manual, bobber}     — слот удочки (0..9 или None), задан ли он вручную, вид поплавка
+      bait     {digits}                       — сколько цифр в числе наживки на удочке (0 — нет наживки)
+      shutdown {seconds}                      — компьютер выключится через seconds секунд (0 — отменено)
       hook     {why, waited}                  — подсечка
       notify   {title, text}                  — важное: пауза не по вашей команде, ошибка
     """
@@ -503,6 +614,13 @@ class Fisher:
         self.switched = False              # на этом круге сами переключили слот
         self.bobber_kind = None            # какой поплавок (ключ картинки) или None — не узнали
         self.mark_before = None            # снимок места до первого заброса (для поиска поплавка)
+        self.hp_base = None                # сколько «сердечных» пикселей при полном (обычном) здоровье
+        self.hp_band = None                # строки, где сердечки
+        self.hp_low = 0                    # сколько проверок подряд здоровья меньше обычного
+        self.hp_last = 0.0
+        self.bait_digits = None            # сколько цифр наживки видно на удочке (None — не смотрели)
+        self.bait_warned = False
+        self.calib_logged = 0.0            # какой порог по текущему забросу уже сообщали
         self.started = None                # когда начали рыбачить (для «подсечек в час»)
         self.n = 0
         self.listeners = []
@@ -601,7 +719,7 @@ class Fisher:
     def sink_ratio(self):
         """Текущий порог подсечки: подобранный автокалибровкой или заданный вручную."""
         if AUTO_CALIB and len(self.calm_floors) >= CALIB_MIN_CASTS:
-            return float(np.clip(np.median(self.calm_floors) - CALIB_MARGIN, 0.35, CALIB_MAX))
+            return float(np.clip(np.median(self.calm_floors) - CALIB_MARGIN, CALIB_MIN, CALIB_MAX))
         return SINK_RATIO
 
     def calib_changed(self):
@@ -611,11 +729,11 @@ class Fisher:
         """Запомнить, сколько поплавка было видно в спокойные моменты заброса (без последней
         секунды перед подсечкой): низкий процентиль — это то, как сильно поплавок «проседает»
         на волнах и под дождём. Порог подсечки ставится ниже этого уровня."""
-        ratios = [r for t, r in calm if t < end_t - 1.0]
-        if len(ratios) < 40:
+        ratios = [r for t, r in calm if CALIB_SKIP <= t < end_t - 1.0]
+        if len(ratios) < 20:
             return
         old = self.sink_ratio()
-        self.calm_floors.append(float(np.percentile(ratios, 2)))
+        self.calm_floors.append(float(np.percentile(ratios, CALIB_PCT)))
         new = self.sink_ratio()
         self.calib_changed()
         if AUTO_CALIB and (len(self.calm_floors) == CALIB_MIN_CASTS or abs(new - old) >= 0.03):
@@ -638,6 +756,9 @@ class Fisher:
             self.state("idle", tr("Нужно окно Terraria"), tr("Переключитесь в игру и нажмите %s") % self.key_name)
             return
         self.fails = self.recover_round = self.errors = self.rod_misses = 0
+        self.hp_base = self.hp_band = None
+        self.hp_low = 0
+        self.bait_digits = None
         if self.started is None:
             self.started = time.time()
         if self.has_points():
@@ -719,7 +840,8 @@ class Fisher:
 
     def reel(self, msg, kind="info"):
         """Вытащить поплавок (вызывается, только когда он точно в воде)."""
-        click(*self.cast_point)
+        if self.cast_point is not None:
+            click(*self.cast_point)
         self.phase, self.watched = "idle", None
         set_cursor(*self.park)
         self.log(msg, kind)
@@ -730,6 +852,12 @@ class Fisher:
         MAX_FAILS раз подряд, встать на паузу."""
         self.fails += 1
         self.stats()
+        if BAIT_WATCH and self.bait_digits == 0:
+            # на удочке в руках нет числа наживки — ждать и пробовать снова бесполезно
+            self.phase, self.watched = "unknown", None
+            self.log("%s" % msg, "bad")
+            self.pause(tr("кончилась наживка (на удочке нет числа наживки)"))
+            return
         if self.switched and ROD_SLOT is None and self.rod_slot is not None:
             self.log(tr("Переключился на слот %d, но поплавка нет — может, удочка теперь в другом слоте? "
                         "Забыл этот слот: возьмите удочку в руки, запомню заново.") % ((self.rod_slot + 1) % 10), "bad")
@@ -909,6 +1037,7 @@ class Fisher:
                 self.log(tr("Похоже, удочка в слоте %d (по картинке) — беру её.") % ((target + 1) % 10))
         if sel[0] == target:
             self.cast_slot = target
+            self.check_bait(frame, sel)
             return False
         if self.rod_misses >= 3:
             return False                     # переключить не получается — больше не пытаемся
@@ -930,6 +1059,26 @@ class Fisher:
                             "Возьмите удочку в руки сами."), "bad")
                 self.emit("notify", title=tr("Удочка"), text=tr("Не получается взять удочку. Возьмите её в руки сами."))
         return True
+
+    def check_bait(self, frame, sel):
+        """Сколько наживки на удочке в руках (по числу цифр). Мало — предупредить один раз."""
+        if not BAIT_WATCH:
+            return
+        import hotbar
+        x0, y0, x1, y1, rel = hotbar.slot_boxes(*sel)[sel[0]]
+        cell = frame[max(0, y0):y1, max(0, x0):x1].astype(np.float64)
+        if cell.shape[0] < 16 or cell.shape[1] < 16:
+            return
+        digits = hotbar.bait_digits(cell, rel * sel[1])
+        if digits != self.bait_digits:
+            self.bait_digits = digits
+            self.emit("bait", digits=digits)
+        if digits == 1 and not self.bait_warned:
+            self.bait_warned = True
+            self.log(tr("Наживки осталось меньше 10."), "bad")
+            self.emit("notify", title=tr("Наживка"), text=tr("Наживки осталось меньше 10."))
+        elif digits >= 2:
+            self.bait_warned = False
 
     def rod_hint(self, frame, selected):
         """Слот, где удочка узнаётся уверенно (есть число наживки и форма удочки), или None."""
@@ -1224,6 +1373,66 @@ class Fisher:
                  % (self.bobber_sprites.title(self.bobber_kind), best[0]))
         return zone["left"] + x + tw // 2, zone["top"] + y + th // 2
 
+    # ---------- здоровье и лимиты ----------
+    def check_health(self, sct, cl, watching=False):
+        """Сердечки здоровья (справа вверху): стало заметно меньше на двух проверках подряд —
+        персонаж получает урон: вытащить поплавок, встать на паузу, сообщить. True — встали."""
+        self.hp_last = time.perf_counter()
+        if not HEALTH_GUARD:
+            return False
+        W, H = cl[2] - cl[0], cl[3] - cl[1]
+        region = {"left": cl[0] + int(W * 0.55), "top": cl[1], "width": W - int(W * 0.55), "height": int(H * 0.25)}
+        mask = heart_mask(grab(sct, region))
+        if self.hp_band is None:
+            self.hp_band = heart_rows(mask)
+            if self.hp_band is None:
+                return False                  # сердечек не видно (другой стиль, скрыт интерфейс)
+        count = int(mask[self.hp_band[0]:self.hp_band[1]].sum())
+        if count < 150:
+            return False
+        if self.hp_base is None or count > self.hp_base:
+            self.hp_base = count              # здоровье восстановилось — это новая «норма»
+        self.hp_low = self.hp_low + 1 if count < self.hp_base * (1 - HEALTH_DROP) else 0
+        if self.hp_low < 2:
+            return False
+        self.hp_low = 0
+        lost = 1 - count / float(self.hp_base)
+        self.hp_base = None
+        if watching and self.cast_point is not None:
+            click(*self.cast_point)           # вытаскиваем поплавок
+        self.phase, self.watched = "idle" if watching else self.phase, None
+        text = tr("Персонаж получает урон (здоровья меньше на %d%%) — вытащил поплавок и поставил на паузу.") \
+            % round(100 * lost)
+        self.log(text, "bad")
+        self.pause(tr("персонаж получает урон"))
+        beep(330, 600)
+        return True
+
+    def session_over(self):
+        """Лимит по времени или подсечкам: вытащить поплавок, остановиться и (если выбрано)
+        выключить компьютер. True — остановились."""
+        why = None
+        if STOP_AFTER_MIN and self.started and time.time() - self.started >= STOP_AFTER_MIN * 60:
+            why = tr("прошло %d мин") % STOP_AFTER_MIN
+        elif STOP_AFTER_HOOKS and self.hooks >= STOP_AFTER_HOOKS:
+            why = tr("сделано %d подсечек") % STOP_AFTER_HOOKS
+        if why is None:
+            return False
+        if self.phase == "watching" and self.cast_point is not None:
+            click(*self.cast_point)
+        self.phase, self.watched = "idle", None
+        self.resume_on_focus = False
+        self.stop_fishing(tr("Рыбалка закончена: %s.") % why)
+        if SHUTDOWN_AFTER:
+            try:
+                schedule_shutdown(SHUTDOWN_DELAY)
+                self.log(tr("Компьютер выключится через %d с. Отменить — кнопка в окне программы.") % SHUTDOWN_DELAY,
+                         "bad")
+                self.emit("shutdown", seconds=SHUTDOWN_DELAY)
+            except Exception as e:
+                self.log(tr("Не получилось запланировать выключение: %r") % e, "bad")
+        return True
+
     # ---------- основной цикл ----------
     def worker(self):
         with (getattr(mss, "MSS", None) or mss.mss)() as sct:
@@ -1304,12 +1513,19 @@ class Fisher:
             self.pause_window()
             return
         cl = client_rect(hwnd)
+        if self.cast_point is None:          # точки сбросили, пока шёл круг
+            return
         cx, cy = self.cast_point
         player = ((cl[0] + cl[2]) // 2, (cl[1] + cl[3]) // 2)  # камера держит игрока в центре
         # пока ждём — курсор над головой персонажа, подальше от поплавка
         self.park = (player[0] + (10 if cx >= player[0] else -10),
                      max(cl[1] + 30, player[1] - int(130 * self.scale)))
 
+        # Лимит сессии (по времени или подсечкам) и здоровье персонажа
+        if self.session_over():
+            return
+        if self.check_health(sct, cl):
+            return
         # 0. Удочка в руках? (если игрок переключал предметы — берём её обратно)
         if self.ensure_rod(sct, cl):
             # сменили предмет — игра убирает поплавок из воды, следить не за чем
@@ -1318,6 +1534,8 @@ class Fisher:
                 return
         # Зелья: нет баффа — выпить (быстрым баффом)
         self.check_buffs(sct, cl)
+        if self.stopped() or self.cast_point is None:
+            return                            # пока пили зелья, поставили на паузу или сбросили точки
 
         # Поплавок уже в воде (например, продолжаем после паузы)? Тогда не забрасываем —
         #    клик по воде вытащил бы его — а сразу следим за ним.
@@ -1429,12 +1647,12 @@ class Fisher:
         else:
             self.state("wait", tr("Жду поклёвку"), tr("Мышь не трогайте. %s — пауза") % self.key_name)
         samples, frames = [], deque(maxlen=120)
-        calm = []                       # (t, доля видимого поплавка) — для автокалибровки
+        det.auto = AUTO_CALIB
+        calm = det.calm                 # (t, доля видимого поплавка) — для автокалибровки
         auto_t = auto_why = None
         max_wait = 120.0 if self.record else MAX_WAIT
         start = last_live = time.perf_counter()
         live_min = None                 # самое малое «видно» между обновлениями полоски
-        calibrating = AUTO_CALIB and len(self.calm_floors) < CALIB_MIN_CASTS
         while True:
             if self.stopped():
                 return
@@ -1442,6 +1660,9 @@ class Fisher:
                 self.pause_window()
                 return
             now = time.perf_counter()
+            if now - self.hp_last >= HEALTH_EVERY:
+                if self.check_health(sct, cl, watching=True):
+                    return
             if now - start > max_wait:
                 self.learn(calm, now - start + 1.0)
                 self.reel(tr("Нет поклёвки %d с — перезаброс.") % max_wait)
@@ -1463,15 +1684,12 @@ class Fisher:
             why = det.feed(frame, t)
             if det.ref and not det.flash and det.seen >= det.ref * 0.8:
                 self.watched = (pos, frame)          # спокойный кадр — таким место и запомним
-            if det.ref and not det.flash and t >= CALIB_TIME:
-                calm.append((t, det.seen / det.ref))
-            if calibrating and t >= CALIB_NOW and len(calm) >= 30:
-                # прошлых забросов для автокалибровки ещё нет — порог по спокойной воде этого заброса
-                calibrating = False
-                floor = float(np.percentile([r for _, r in calm], 2))
-                det.ratio = float(np.clip(floor - CALIB_MARGIN, 0.35, CALIB_MAX))
-                self.log(tr("Автокалибровка по этому забросу: подсекаю, когда видно меньше %d%% поплавка.")
-                         % round(100 * det.ratio))
+            if det.raised:                          # порог подняли на лету — сообщаем, если заметно
+                det.raised = False
+                if abs(det.ratio - self.calib_logged) >= 0.05:
+                    self.calib_logged = det.ratio
+                    self.log(tr("Автокалибровка по этому забросу: подсекаю, когда видно меньше %d%% поплавка.")
+                             % round(100 * det.ratio))
             if not det.flash:
                 live_min = det.seen if live_min is None else min(live_min, det.seen)
             if now - last_live > 0.1:
@@ -1479,7 +1697,7 @@ class Fisher:
                 # на полоске — самое малое за это время: короткий нырок поплавка тоже будет виден
                 self.emit("live", seen=live_min if live_min is not None else det.seen, ref=det.ref,
                           ratio=det.ratio, frame=frame, t=t, max_wait=max_wait, flash=det.flash,
-                          auto=AUTO_CALIB and (len(self.calm_floors) >= CALIB_MIN_CASTS or not calibrating))
+                          auto=AUTO_CALIB)
                 live_min = None
             if self.record:
                 if why and auto_t is None:

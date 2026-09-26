@@ -99,11 +99,28 @@ def text_mask(cell):
     return white & near
 
 
+def count_text(cell, size):
+    """Пиксели числа внизу слота — без рамки слота (у выбранного слота она светлая с тёмной
+    обводкой, как цифры). size — размер слота относительно полного при масштабе интерфейса 100 %."""
+    m = int(round(5 * size / 0.75))
+    t = text_mask(cell)
+    return t[int(cell.shape[0] * 0.55):-m or None, m:-m or None]
+
+
 def has_count(cell, size):
-    """Написано ли внизу слота число (у удочки — сколько наживки, у стопок — сколько штук).
-    size — размер слота относительно полного при масштабе интерфейса 100 %."""
-    low = text_mask(cell)[int(cell.shape[0] * 0.55):].sum()
-    return low >= 10 * (size / 0.75) ** 2
+    """Написано ли внизу слота число (у удочки — сколько наживки, у стопок — сколько штук)."""
+    return count_text(cell, size).sum() >= 10 * (size / 0.75) ** 2
+
+
+def bait_digits(cell, size):
+    """Сколько цифр в числе внизу слота (у удочки — сколько наживки): 0 — числа нет.
+    Сами цифры слишком мелкие, чтобы уверенно их прочитать, но ширину надписи видно хорошо:
+    одна цифра — около 6 пикселей при масштабе интерфейса 100 % в обычном слоте."""
+    if not has_count(cell, size):
+        return 0
+    cols = np.nonzero(count_text(cell, size).any(0))[0]
+    width = cols.max() - cols.min() + 1
+    return max(1, int(round((width + 1) / (6.0 * size / 0.75))))
 
 
 def slot_background(cell):
