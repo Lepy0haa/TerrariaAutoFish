@@ -11,3 +11,7 @@ __pycache__/
 # отладка / debug output
 debug/
 record/
+
+# настройки портативного режима / portable-mode settings
+settings/
+*.npz

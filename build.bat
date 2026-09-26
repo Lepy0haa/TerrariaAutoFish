@@ -17,7 +17,9 @@ python -m PyInstaller --noconfirm --onefile --windowed --name TerrariaAutoFish-%
 rmdir /s /q "%~dp0dist\portable" 2>nul
 mkdir "%~dp0dist\portable\TerrariaAutoFish"
 copy /y "%~dp0dist\TerrariaAutoFish.exe" "%~dp0dist\portable\TerrariaAutoFish\" >nul
-copy /y "%~dp0portable.txt" "%~dp0README.md" "%~dp0README.ru.md" "%~dp0dist\portable\TerrariaAutoFish\" >nul
+copy /y "%~dp0portable_note.txt" "%~dp0dist\portable\TerrariaAutoFish\portable.txt" >nul
+copy /y "%~dp0README.md" "%~dp0dist\portable\TerrariaAutoFish\" >nul
+copy /y "%~dp0README.ru.md" "%~dp0dist\portable\TerrariaAutoFish\" >nul
 powershell -NoProfile -Command "Compress-Archive -Force -Path '%~dp0dist\portable\TerrariaAutoFish' -DestinationPath '%~dp0dist\TerrariaAutoFish-%VER%-portable.zip'" || goto :error
 rmdir /s /q "%~dp0dist\portable" "%~dp0_build"
 del "%~dp0icon.ico"
