@@ -52,6 +52,7 @@ POLL = 0.005          # сек. между снимками при ожидан�
 ZONE_X = 40           # насколько далеко от отметки (px при SCALE=1) может упасть поплавок по горизонтали
 ZONE_Y = 30           # ...и по вертикали
 NOT_FOUND_ERR = 1500  # если в зоне нет ничего похожего на поплавок сильнее этого — «не найден»
+SIMILAR_MIN = 0.3     # «поплавок уже в воде», только если силуэт и цвет так похожи на запомненный
 
 SINK_RATIO = 0.55     # поклёвка: видно меньше этой доли поплавка, чем обычно (поплавок ушёл под воду)
 CONFIRM = 3           # сколько снимков подряд должно подтверждать поклёвку
@@ -205,26 +206,97 @@ def light_factor(frame):
     return float(np.clip(max(top, bottom) / 110.0, 0.35, 1.0))
 
 
-def bobber_palette(frame, box, far_side, k=1.0):
-    """Цвета надводной части поплавка: насыщенные пиксели в рамке box (x, y, w, h) выше
-    линии воды, которых нет в фоне. Фон — верхние строки (небо), нижние (вода) и
-    3 столбца с края far_side (-1 левый, +1 правый) — со стороны, противоположной леске:
-    там небо, вода и блики у линии воды. По краю же находим линию воды."""
+def _background(frame, far_side):
+    """Цвета фона окошка: верхние строки (небо), нижние (вода) и край со стороны без лески."""
     edge = frame[:, :3] if far_side < 0 else frame[:, -3:]
-    sky = np.median(frame[:3].reshape(-1, 3), 0)
-    water = np.median(frame[-3:].reshape(-1, 3), 0)
-    rows = np.median(edge, 1)
-    wet = np.abs(rows - water).max(1) < np.abs(rows - sky).max(1)
-    waterline = int(np.argmax(wet)) if wet.any() else frame.shape[0]
     bg = np.concatenate([edge.reshape(-1, 3), frame[:3].reshape(-1, 3), frame[-3:].reshape(-1, 3)])
-    bg = np.unique((bg // 4) * 4, axis=0)
-    x, y, w, h = box
-    px = frame[y:min(y + h, waterline + 1), x:x + w].reshape(-1, 3)
+    return edge, np.unique((bg // 4) * 4, axis=0)
+
+
+def _pick_colors(px, bg, k):
     if not len(px):
         return px
     far = np.abs(px[:, None] - bg[None]).max(2).min(1) > BG_DIST * k
     vivid = (px.max(1) - px.min(1)) > SAT_MIN * k
     return np.unique((px[far & vivid] // 4) * 4, axis=0)
+
+
+def template_palette(tmpl, frame, far_side, k=1.0):
+    """Запасной путь: цвета верхней (надводной) части запомненного образца поплавка, которых нет
+    в фоне текущего кадра. Не зависит от того, где кадр «думает», что проходит линия воды."""
+    _, bg = _background(frame, far_side)
+    return _pick_colors(tmpl[:tmpl.shape[0] * 2 // 3].reshape(-1, 3), bg, k)
+
+
+def bobber_mask(img):
+    """Силуэт поплавка: яркие насыщенные пиксели, не похожие на небо (верх) и воду (низ).
+    Пороги подстраиваются под яркость картинки (ночь, пещера)."""
+    k = light_factor(img)
+    sky = np.median(img[:3].reshape(-1, 3), 0)
+    water = np.median(img[-3:].reshape(-1, 3), 0)
+    far = np.minimum(np.abs(img - sky).max(2), np.abs(img - water).max(2)) > BG_DIST * k
+    vivid = (img.max(2) - img.min(2)) > SAT_MIN * k
+    return far & vivid
+
+
+def shape_similarity(patch, ref, shift=2):
+    """Похож ли силуэт в patch на силуэт поплавка ref (0..1, пересечение/объединение) —
+    с допуском сдвига на shift пикселей. Небо и вода не участвуют, поэтому яркое пятно
+    другой формы у линии воды (не поплавок) получает низкую оценку."""
+    a, b = bobber_mask(patch), bobber_mask(ref)
+    if b.sum() < 4 or a.sum() < 4:
+        return 0.0
+    best = 0.0
+    for dy in range(-shift, shift + 1):
+        for dx in range(-shift, shift + 1):
+            sa = np.roll(np.roll(a, dy, 0), dx, 1)
+            inter = (sa & b).sum()
+            best = max(best, inter / float((sa | b).sum()))
+    return best
+
+
+def color_match(patch, ref):
+    """Доля ярких пикселей patch, чей оттенок (цвет без яркости) есть среди оттенков поплавка ref."""
+    a, b = patch[bobber_mask(patch)], ref[bobber_mask(ref)]
+    if not len(a) or not len(b):
+        return 0.0
+    ca = a / (a.sum(1, keepdims=True) + 1e-6)
+    cb = np.unique(np.round(b / (b.sum(1, keepdims=True) + 1e-6), 2), axis=0)
+    d = np.abs(ca[:, None] - cb[None]).max(2).min(1)
+    return float((d <= 0.08).mean())
+
+
+def bobber_likeness(patch, ref):
+    """Похоже ли место на поплавок: силуэт × цвет (0..1)."""
+    return shape_similarity(patch, ref) * color_match(patch, ref)
+
+
+def patch_similarity(a, b):
+    """Похожи ли две картинки одного размера по рисунку (нормированная корреляция, -1..1).
+    Не зависит от общей яркости и оттенка — годится и днём, и ночью."""
+    a = a - a.mean(axis=(0, 1))
+    b = b - b.mean(axis=(0, 1))
+    den = np.sqrt((a * a).sum() * (b * b).sum())
+    return float((a * b).sum() / den) if den > 1e-6 else 0.0
+
+
+def bobber_palette(frame, box, far_side, k=1.0):
+    """Цвета надводной части поплавка: насыщенные пиксели в рамке box (x, y, w, h) выше
+    линии воды, которых нет в фоне. Фон — верхние строки (небо), нижние (вода) и
+    3 столбца с края far_side (-1 левый, +1 правый) — со стороны, противоположной леске:
+    там небо, вода и блики у линии воды. По краю же находим линию воды."""
+    edge, bg = _background(frame, far_side)
+    sky = np.median(frame[:3].reshape(-1, 3), 0)
+    water = np.median(frame[-3:].reshape(-1, 3), 0)
+    rows = np.median(edge, 1)
+    wet = np.abs(rows - water).max(1) < np.abs(rows - sky).max(1)
+    waterline = int(np.argmax(wet)) if wet.any() else frame.shape[0]
+    x, y, w, h = box
+    if waterline < y + h // 3:
+        # «Вода» нашлась выше поплавка — так не бывает (ночью небо и вода почти одного цвета).
+        # Считаем, что линия воды проходит по середине поплавка.
+        waterline = y + h // 2
+    return _pick_colors(frame[y:min(y + h, waterline + 1), x:x + w].reshape(-1, 3), bg, k)
 
 
 def snap_bobber(frame, w, h, min_px, k=1.0):
@@ -385,6 +457,11 @@ class Fisher:
         self.mark = None                   # где искать поплавок (сдвигается, если он падает в другом месте)
         self.bobber = None                 # как выглядит поплавок (обновляется под освещение)
         self.mark0 = self.bobber0 = None   # то, что игрок отметил сам, — для поиска потерянного поплавка
+        # Где сейчас поплавок: "idle" — не заброшен, "watching" — в воде и мы за ним следили
+        # (self.watched = (центр, снимок окошка)), "unknown" — неизвестно (пауза во время заброса,
+        # неудача, запуск программы). Нужно, чтобы после паузы не кликать вслепую.
+        self.phase = "idle"
+        self.watched = None
         self.calm_floors = deque(maxlen=8)  # автокалибровка: «спокойный минимум» по последним забросам
         self.hooks = self.casts = self.fails = 0
         self.recover_round = 0             # сколько раз подряд уже пробовали восстановиться
@@ -477,6 +554,7 @@ class Fisher:
             self.mark0 = tuple(int(v) for v in d["mark0"])
             self.bobber = d["bobber"].astype(np.float32)
             self.bobber0 = d["bobber0"].astype(np.float32)
+            self.phase = "unknown"
             return True
         except Exception:
             return False
@@ -536,6 +614,7 @@ class Fisher:
         else:
             self.cast_point = get_cursor()
             self.mark = self.bobber = self.mark0 = self.bobber0 = None
+            self.phase, self.watched = "unknown", None
             self.calm_floors.clear()      # новое место — калибруемся заново
             self.log(tr("Старт. Точка заброса: %s.%s") % (self.cast_point, tr(" Подсекаете вы.") if self.record else ""),
                      "good")
@@ -602,7 +681,9 @@ class Fisher:
         return True
 
     def reel(self, msg, kind="info"):
+        """Вытащить поплавок (вызывается, только когда он точно в воде)."""
         click(*self.cast_point)
+        self.phase, self.watched = "idle", None
         set_cursor(*self.park)
         self.log(msg, kind)
         self.wait(REEL_DELAY)
@@ -612,7 +693,11 @@ class Fisher:
         MAX_FAILS раз подряд, встать на паузу."""
         self.fails += 1
         self.stats()
-        self.reel("%s (%d/%d)" % (msg, self.fails, MAX_FAILS), "bad")
+        # Не кликаем вслепую: клик мог бы и вытащить, и забросить. Где поплавок — посмотрим
+        # на следующем круге и тогда решим.
+        self.phase, self.watched = "unknown", None
+        self.log("%s (%d/%d)" % (msg, self.fails, MAX_FAILS), "bad")
+        self.wait(REEL_DELAY)
         if self.fails < MAX_FAILS or self.stopped():
             return
         if AUTO_RECOVER and self.recover_round < len(RECOVER_WAITS):
@@ -682,7 +767,7 @@ class Fisher:
             self.log(tr("Поплавок запомнен: %s. Дальше — автоматически.") % (self.mark,), "good")
             return self.mark
 
-    def search(self, sct, cl, center, half_x, half_y, wide=False, strict=False):
+    def search(self, sct, cl, center, half_x, half_y, wide=False, strict=False, update=True):
         """Ищет поплавок в зоне вокруг center. Возвращает (центр или None, непохожесть).
         Обычный поиск — по текущему образцу. Широкий (wide) — ещё и по образцу, который
         отметил игрок, и просто по цветам поплавка."""
@@ -726,13 +811,40 @@ class Fisher:
         if hit is None:
             return None, best_err
         x, y = hit
-        if blob:
+        if blob and update:
             self.bobber = frame[y:y + th, x:x + tw].copy()   # обновляем образец под текущее освещение
         pos = (zone["left"] + x + tw // 2, zone["top"] + y + th // 2)
         if self.debug:
             self.log(tr("Поплавок: %s, непохожесть %.0f, пятно поплавка: %s%s")
                      % (pos, best_err, tr("есть") if blob else tr("нет"), tr(" (широкий поиск)") if wide else ""))
         return pos, best_err
+
+    def similarity(self, sct, pos):
+        """Насколько силуэт в месте pos похож на запомненный поплавок (лучшее из текущего и
+        исходного образца)."""
+        patch = grab(sct, rect_around(pos, self.tw // 2, self.th // 2))
+        refs = [r for r in (self.bobber, self.bobber0, getattr(self, "bobber_ref", None))
+                if r is not None and r.shape == patch.shape]
+        return max((bobber_likeness(patch, r) for r in refs), default=0.0)
+
+    def bobber_in_water(self, sct, cl):
+        """Лежит ли поплавок в воде прямо сейчас (например, продолжаем после паузы). Засчитываем,
+        только если найденное похоже на запомненный поплавок и стоит на месте на двух снимках
+        подряд: только что заброшенный (ещё летящий) поплавок ждём, пока не сядет."""
+        last = None
+        end = time.perf_counter() + SETTLE_TIME + 1.5
+        while time.perf_counter() < end:
+            # образец не обновляем, пока не убедились, что это поплавок, а не что-то похожее рядом
+            pos, _ = self.search(sct, cl, self.mark, self.zone_x, self.zone_y, strict=True, update=False)
+            ok = pos is not None and self.similarity(sct, pos) >= SIMILAR_MIN
+            if ok and last is not None and max(abs(pos[0] - last[0]), abs(pos[1] - last[1])) <= 4:
+                return pos
+            if not ok and last is None and pos is None:
+                return None                      # с первого взгляда ничего нет — поплавка нет
+            last = pos if ok else None
+            if not self.wait(0.4):
+                return None
+        return None
 
     def locate(self, sct, cl):
         """Найти поплавок после заброса. Если его нет на обычном месте — подождать (вдруг
@@ -850,16 +962,32 @@ class Fisher:
         # Поплавок уже в воде (например, продолжаем после паузы)? Тогда не забрасываем —
         #    клик по воде вытащил бы его — а сразу следим за ним.
         pos = None
-        if self.bobber is not None and self.mark is not None:
-            set_cursor(*self.park)
-            pos, _ = self.search(sct, cl, self.mark, self.zone_x, self.zone_y, strict=True)
+        set_cursor(*self.park)
+        if self.phase == "watching" and self.watched is not None:
+            # Пауза была во время ожидания поклёвки: лежит ли поплавок там же, где был?
+            # Смотрим на силуэт и цвет самого поплавка (небо и вода в сравнении не участвуют).
+            wpos, wframe = self.watched
+            self.bobber_ref = wframe[self.track_ry:self.track_ry + self.th, self.track_rx:self.track_rx + self.tw]
+            region = rect_around(wpos, self.tw // 2, self.th // 2)
+            if inside(region, cl) and self.similarity(sct, wpos) >= SIMILAR_MIN:
+                pos = wpos
+                self.log(tr("Поплавок уже в воде — продолжаю следить за ним."))
+            else:
+                self.phase, self.watched = "unknown", None
+        if pos is None and self.phase == "unknown" and self.bobber is not None and self.mark is not None:
+            pos = self.bobber_in_water(sct, cl)
+            if self.stopped():
+                return
             if pos:
                 self.log(tr("Поплавок уже в воде — продолжаю следить за ним."))
+            else:
+                self.phase = "idle"
 
         # 1. заброс
         if pos is None:
             self.state("cast", tr("Заброс"), tr("Мышь не трогайте"))
             click(cx, cy)
+            self.phase, self.watched = "unknown", None     # заброшен, но ещё не нашли
             self.casts += 1
             self.stats()
             if self.bobber is None:
@@ -896,11 +1024,19 @@ class Fisher:
             palette = bobber_palette(first, (rx, ry, tw, th), side, k)
             det = BiteDetector(palette, debug=self.debug)
             base = det.visible(first) if len(palette) else 0
+        for ref in (self.bobber, self.bobber0):          # запасной путь: цвета из образца поплавка
+            for kk in (1.0, k):
+                if base >= self.min_bobber_px or ref is None:
+                    break
+                palette = template_palette(ref, first, side, kk)
+                det = BiteDetector(palette, debug=self.debug)
+                base = det.visible(first) if len(palette) else 0
         det.ratio = self.sink_ratio()
         if base < self.min_bobber_px:
             self.fail(tr("Поплавок почти не виден (%d пикс.).") % base)
             return
         self.fails = self.recover_round = self.errors = 0
+        self.phase, self.watched = "watching", (pos, first)
         self.stats()
         if self.record:
             while not self.clicks.empty():
@@ -931,6 +1067,7 @@ class Fisher:
                 except queue.Empty:
                     pass
                 else:
+                    self.phase, self.watched = "idle", None
                     self.learn(calm, t_click)
                     self.report(det, samples, frames, first, t_click, auto_t, auto_why)
                     self.wait(REEL_DELAY)
@@ -939,6 +1076,8 @@ class Fisher:
             frame = grab(sct, watch)
             t = now - start
             why = det.feed(frame, t)
+            if det.ref and not det.flash and det.seen >= det.ref * 0.8:
+                self.watched = (pos, frame)          # спокойный кадр — таким место и запомним
             if det.ref and not det.flash and t >= CALIB_TIME:
                 calm.append((t, det.seen / det.ref))
             if now - last_live > 0.1:
