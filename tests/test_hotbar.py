@@ -2,8 +2,10 @@
 
 На снимках sel_1..sel_0 выбран слот 1..0, удочка (Mechanic's Rod, 356 наживки) — в слоте 5,
 в слоте 1 — кнут «Шипохват», в слоте 9 — зелья (тоже с числом)."""
+import os
 import unittest
 
+import numpy as np
 
 import helpers  # noqa: F401  (пути и настройки)
 from helpers import af, hotbar, load_bgr
@@ -136,6 +138,23 @@ class TestHotbar(unittest.TestCase):
         finally:
             af.ROD_SLOT, af.ROD_KEY_WAITS = None, old
             restore()
+
+    def test_reads_bait_count(self):
+        # число наживки на удочке — по образцам цифр игрового шрифта (снимки игрока)
+        import hotbar
+        reader = hotbar.DigitReader(os.path.join(af.ASSET_DIR, "digits.npz"))
+        for name, slot, number in (("garland_crate_potion.png", 5, 294), ("rod_274_bait.png", 5, 274),
+                                   ("sel_5.png", 4, 356), ("old_capture_rod_selected.png", 4, 208)):
+            img = helpers.load_bgr("hotbar", name)
+            sel = hotbar.selected_slot(img)
+            x0, y0, x1, y1, rel = hotbar.slot_boxes(*sel)[slot]
+            cell = img[max(0, y0):y1, max(0, x0):x1].astype(np.float64)
+            self.assertEqual(reader.read(cell, rel * sel[1]), number, name)
+        # в слоте без числа — ничего
+        img = helpers.load_bgr("hotbar", "sel_5.png")
+        sel = hotbar.selected_slot(img)
+        x0, y0, x1, y1, rel = hotbar.slot_boxes(*sel)[0]
+        self.assertIsNone(reader.read(img[max(0, y0):y1, max(0, x0):x1].astype(np.float64), rel * sel[1]))
 
     def test_rod_already_in_hand(self):
         game = helpers.FakeGame(selected="5")

@@ -134,6 +134,7 @@ class TestReportAndWizard(unittest.TestCase):
             pass
         f = Fake()
         f.cfg, f.catch_data, f.catch_info, f.last_caught, f.absent = cfg, c, {"biome": "lava"}, "Обсидирыба", ["crate"]
+        f.bait, f.bait_count, f.fisher = None, None, None
         text = " | ".join(app.App.mode_lines(f))
         for part in ("сонар", "Лава", "авто", "Задание рыбака", "рыбалки, ящиков", "из хотбара",
                      "нет в хотбаре: ящиков", "урон, полный инвентарь", "через 60 мин", "выключу ПК",
@@ -143,6 +144,20 @@ class TestReportAndWizard(unittest.TestCase):
                    quest_fish=None)
         f.last_caught = None
         self.assertEqual(app.App.mode_lines(f), [af.tr("Улов: всё подряд")])
+
+    def test_bait_text(self):
+        import app
+
+        class Fake:
+            pass
+        f = Fake()
+        f.bait, f.bait_count = 3, 294
+        f.fisher = type("F", (), {"started": time.time() - 600, "hooks": 100})()   # подсечка раз в 6 с
+        text = app.App.bait_text(f)
+        self.assertTrue(text.startswith("294"), text)
+        self.assertIn("29 мин", text)                         # 294 · 6 с ≈ 29 мин
+        f.bait_count = None
+        self.assertEqual(app.App.bait_text(f), "100+")
 
     def test_wizard_pages(self):
         pages = wizard.pages("HOME", "END")

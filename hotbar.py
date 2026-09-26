@@ -141,6 +141,81 @@ def bait_digits(cell, size):
     return max(1, int(round((width + 1) / (6.0 * size / 0.75))))
 
 
+DIGIT_WHITE = 180   # для чтения самих цифр — мягче, чем для «есть ли число»: тонкие штрихи 3 и 7 не рвутся
+DIGIT_GRID = (6, 9)  # в такую сетку клеток приводится каждая цифра (ширина, высота)
+
+
+def digit_mask(cell, size):
+    """Белые пиксели числа внизу слота (как count_text, но порог белого мягче)."""
+    white = (cell.min(2) > DIGIT_WHITE) & (cell.max(2) - cell.min(2) < 40)
+    dark = cell.max(2) < 70
+    near = np.zeros_like(dark)
+    for dy in (-2, -1, 0, 1, 2):
+        for dx in (-2, -1, 0, 1, 2):
+            near |= np.roll(np.roll(dark, dy, 0), dx, 1)
+    m = int(round(5 * size / 0.75))
+    return (white & near)[int(cell.shape[0] * 0.55):-m or None, m:-m or None]
+
+
+def digit_glyphs(cell, size):
+    """Цифры числа слева направо: маски отдельных цифр (разделены пустыми столбцами)."""
+    m = digit_mask(cell, size)
+    cols = list(m.any(0)) + [False]
+    out, start = [], None
+    for x, on in enumerate(cols):
+        if on and start is None:
+            start = x
+        elif not on and start is not None:
+            if m[:, start:x].sum() >= 3:           # одиночные точки — шум
+                out.append(m[:, start:x])
+            start = None
+    return out
+
+
+def glyph_features(g):
+    """Цифра -> вектор: доли белого в клетках сетки DIGIT_GRID (крупные и мелкие цифры одинаково)
+    и соотношение сторон (единица узкая)."""
+    ys, xs = np.nonzero(g)
+    g = g[ys.min():ys.max() + 1, xs.min():xs.max() + 1].astype(np.float64)
+    h, w = g.shape
+    gw, gh = DIGIT_GRID
+    cells = np.kron(g, np.ones((gh, gw))).reshape(gh, h, gw, w).mean((1, 3))
+    return np.concatenate([cells.ravel(), [2.0 * w / h]])
+
+
+class DigitReader:
+    """Число внизу слота (сколько наживки на удочке) по образцам цифр игрового шрифта
+    (assets/digits.npz, собраны скриптом tools/build_digits.py со снимков хотбара из игры)."""
+    MAX_DIST = 8.0       # цифра дальше от всех образцов — не цифра (или не разобрать)
+    MARGIN = 0.9         # лучший образец должен быть заметно ближе лучшего образца другой цифры
+
+    def __init__(self, path):
+        d = np.load(path)
+        self.feats, self.labels = d["features"], [str(v) for v in d["labels"]]
+
+    def digit(self, g):
+        f = glyph_features(g)
+        dist = np.abs(self.feats - f).sum(1)
+        order = np.argsort(dist)
+        best = self.labels[order[0]]
+        other = next((dist[i] for i in order if self.labels[i] != best), np.inf)
+        if dist[order[0]] > self.MAX_DIST or dist[order[0]] > self.MARGIN * other:
+            return None
+        return best
+
+    def read(self, cell, size):
+        """Число (int) или None — числа нет или прочитать уверенно не получилось."""
+        if not has_count(cell, size):
+            return None
+        gs = digit_glyphs(cell, size)
+        if not 1 <= len(gs) <= 4:
+            return None
+        ds = [self.digit(g) for g in gs]
+        if None in ds:
+            return None
+        return int("".join(ds))
+
+
 def slot_background(cell):
     edge = np.concatenate([cell[4:6].reshape(-1, 3), cell[-6:-4].reshape(-1, 3),
                            cell[:, 4:6].reshape(-1, 3), cell[:, -6:-4].reshape(-1, 3)])

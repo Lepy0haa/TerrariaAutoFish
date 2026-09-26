@@ -105,6 +105,8 @@ SONAR_TEXT_EVERY = 0.05   #   ...смотреть на место надписи
 BOBBER_PARTS = (0.55, 0.4)   # какая доля поплавка сверху видна: в воде / в лаве (она непрозрачная)
 GAME_NAMES = True     # названия улова брать из установленной игры (Terraria.exe), а не только с Вики
 QUEST_FISH = None     # рыба для задания рыбака (id): поймали — пауза и уведомление
+AUTO_ZOOM = True      # при первом автопоиске поплавка узнать Zoom игры по размеру поплавка
+ZOOMS = (1.0, 1.25, 1.5, 1.75, 2.0)   # какие бывают (игра не мельче 100 %)
 FOLLOW_SHIFT = True   # вся картинка сдвинулась (персонажа сдвинуло) — перенести точки на столько же
 SHIFT_MIN = 3         #   ...если сдвиг хотя бы столько пикселей
 ROD_KEY_WAITS = (0.3, 0.5, 0.8)   # взять удочку: попыток нажать цифру слота и сколько ждать после каждой
@@ -376,11 +378,15 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             import hotbar
             import sprites
             self.rods = hotbar.RodFinder(os.path.join(ASSET_DIR, "rods"))
+            try:                           # образцы цифр — читать число наживки на удочке
+                self.digit_reader = hotbar.DigitReader(os.path.join(ASSET_DIR, "digits.npz"))
+            except Exception:
+                self.digit_reader = None
             self.potions = hotbar.ItemFinder(os.path.join(ASSET_DIR, "potions"), need_count=False)
             self.bobber_sprites = sprites.SpriteSet(os.path.join(ASSET_DIR, "bobbers"), part=BOBBER_PARTS,
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
-            self.rods = self.bobber_sprites = self.potions = None
+            self.rods = self.bobber_sprites = self.potions = self.digit_reader = None
         try:                               # что ловится в каждом биоме (для выбора улова по сонару)
             import catches
             self.catches = catches.Catches(os.path.join(ASSET_DIR, "fishing", "catches.json"))
@@ -414,6 +420,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
         self.scene = None                  # снимок места рыбалки (см. follow_shift)
+        self.zoom_probe = False            # идёт первый автопоиск — пробуем все масштабы
         self.shifts = 0                    # сколько раз переносили точки за сдвигом картинки
         self.rod_miss_time = 0.0            # когда не получилось взять удочку клавишей
         self.cast_slot = None              # какой слот был выбран при последнем забросе
@@ -425,6 +432,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.hp_low = 0                    # сколько проверок подряд здоровья меньше обычного
         self.hp_last = 0.0
         self.bait_digits = None            # сколько цифр наживки видно на удочке (None — не смотрели)
+        self.bait_count = None             # само число наживки (если прочиталось уверенно)
         self.bait_warned = False
         self.calib_logged = 0.0            # какой порог по текущему забросу уже сообщали
         self.started = None                # когда начали рыбачить (для «подсечек в час»)

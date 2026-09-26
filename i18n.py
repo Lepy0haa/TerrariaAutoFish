@@ -485,6 +485,13 @@ EN = {
     "заброса и поплавка туда же.":
         "The picture moved by %+d, %+d px — the character was probably pushed. Moving the cast point "
         "and the bobber mark along.",
+    "Похоже, Zoom в игре %d%% (в настройках было %d%%) — поставил %d%%.":
+        "Looks like the game's Zoom is %d%% (settings had %d%%) — set it to %d%%.",
+    " (хватит на ~%s)": " (enough for ~%s)",
+    "меньше минуты": "less than a minute",
+    "%d мин": "%d min",
+    "%d ч %d мин": "%d h %d min",
+    "Наживка: %s": "Bait: %s",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

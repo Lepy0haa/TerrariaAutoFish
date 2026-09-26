@@ -132,7 +132,10 @@ class GearMixin:
                  % ((self.rod_slot + 1) % 10), "good")
 
     def sprite_scales(self):
-        """Масштабы, в которых искать поплавок: около Zoom из настроек (игра не бывает мельче 100 %)."""
+        """Масштабы, в которых искать поплавок: около Zoom из настроек (игра не бывает мельче 100 %).
+        При первом автопоиске с «Zoom сам» — все, чтобы узнать Zoom игры."""
+        if self.zoom_probe:
+            return list(A.ZOOMS)
         return sorted({max(1.0, round(self.scale, 2))} |
                       {v for v in (1.0, 1.25, 1.5, 1.75, 2.0) if abs(v - self.scale) <= 0.3})
 
@@ -204,7 +207,8 @@ class GearMixin:
         return True
 
     def check_bait(self, frame, sel):
-        """Сколько наживки на удочке в руках (по числу цифр). Мало — предупредить один раз."""
+        """Сколько наживки на удочке в руках: само число (по образцам цифр), а если не прочиталось
+        уверенно — хотя бы сколько в нём цифр. Мало — предупредить один раз."""
         if not A.BAIT_WATCH:
             return
         import hotbar
@@ -213,10 +217,18 @@ class GearMixin:
         if cell.shape[0] < 16 or cell.shape[1] < 16:
             return
         digits = hotbar.bait_digits(cell, rel * sel[1])
-        if digits != self.bait_digits:
-            self.bait_digits = digits
-            self.emit("bait", digits=digits)
-        if digits == 1 and not self.bait_warned:
+        count = None
+        if digits and self.digit_reader is not None:
+            try:
+                count = self.digit_reader.read(cell, rel * sel[1])
+            except Exception:
+                count = None
+            if count is not None and len(str(count)) != digits:
+                count = None                     # не сходится с шириной числа — не верим
+        if digits != self.bait_digits or count != self.bait_count:
+            self.bait_digits, self.bait_count = digits, count
+            self.emit("bait", digits=digits, count=count)
+        if (digits == 1 or (count is not None and count < 10)) and not self.bait_warned:
             self.bait_warned = True
             self.log(tr("Наживки осталось меньше 10."), "bad")
             self.emit("notify", title=tr("Наживка"), text=tr("Наживки осталось меньше 10."))
@@ -274,10 +286,11 @@ class GearMixin:
         return out
 
     def sprite_search(self, frame, only=None, changed=None, n=8):
-        """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ) или None."""
+        """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ, масштаб) или None."""
         if self.bobber_sprites is None:
             return None
-        pad_x, pad_y = self.tw + int(8 * self.scale), self.th + int(8 * self.scale)
+        k = max(self.sprite_scales()) / self.scale      # запас под самый крупный масштаб
+        pad_x, pad_y = int((self.tw + 8 * self.scale) * k), int((self.th + 8 * self.scale) * k)
         best = None
         for cx, cy in self.sprite_candidates(frame, n, changed):
             x0, y0 = max(0, cx - pad_x), max(0, cy - pad_y)
@@ -285,7 +298,7 @@ class GearMixin:
             r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only)
             if r and (best is None or r[0] > best[0]):
                 v, x, y, w, h, key, s = r
-                best = (v, x0 + x + w // 2, y0 + y + h // 2, key)
+                best = (v, x0 + x + w // 2, y0 + y + h // 2, key, s)
         return best
 
     def mark_area(self, cl, player):
@@ -305,6 +318,13 @@ class GearMixin:
         и точкой заброса (и чуть дальше). Возвращает центр или None (тогда попросим отметить)."""
         if not A.AUTO_MARK or self.bobber_sprites is None:
             return None
+        self.zoom_probe = A.AUTO_ZOOM                # заодно узнаем Zoom игры по размеру поплавка
+        try:
+            return self._auto_mark(sct, cl, player)
+        finally:
+            self.zoom_probe = False
+
+    def _auto_mark(self, sct, cl, player):
         s, tw, th = self.scale, self.tw, self.th
         area = self.mark_area(cl, player)
         if area is None:
@@ -341,7 +361,14 @@ class GearMixin:
                 self.log(tr("Похожее на поплавок: %s, совпадение %.2f — мало.")
                          % (self.bobber_sprites.title(best[3]), best[0]))
             return None
-        v, bx, by, key = best
+        v, bx, by, key, zoom = best
+        if A.AUTO_ZOOM and abs(zoom - self.scale) >= 0.2 and v >= A.SPRITE_MIN + 0.05:
+            # поплавок уверенно совпал в другом масштабе — значит, Zoom в игре другой
+            self.log(tr("Похоже, Zoom в игре %d%% (в настройках было %d%%) — поставил %d%%.")
+                     % (round(100 * zoom), round(100 * self.scale), round(100 * zoom)), "good")
+            self.set_scale(zoom)
+            self.emit("zoom", scale=zoom)
+            tw, th = self.tw, self.th
         # уточняем место так же, как при отметке курсором
         snap = self.snap
         center = (x0 + bx, y0 + by)

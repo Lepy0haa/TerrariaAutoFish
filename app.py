@@ -215,6 +215,16 @@ def save_cfg(cfg):
         pass
 
 
+def fmt_left(seconds):
+    """Сколько осталось: «1 ч 20 мин» / «35 мин» / «меньше минуты»."""
+    m = int(seconds // 60)
+    if m < 1:
+        return tr("меньше минуты")
+    if m < 60:
+        return tr("%d мин") % m
+    return tr("%d ч %d мин") % (m // 60, m % 60)
+
+
 def fmt_time(sec):
     sec = int(sec)
     return "%d:%02d:%02d" % (sec // 3600, sec // 60 % 60, sec % 60)
@@ -334,6 +344,7 @@ class App:
         self.log_lines = []               # (время, текст, тип) — чтобы пересоздать журнал при смене языка
         self.gear = {"rod_slot": None, "manual": False, "bobber": None}
         self.bait = None                  # сколько цифр наживки видно на удочке
+        self.bait_count = None            # само число наживки (если прочиталось)
         self.catch_info = None            # последнее, что прочитал сонар
         self.last_caught = None           # название последнего подобранного улова
         self.absent = []                  # каких нужных зелий нет в хотбаре
@@ -1061,9 +1072,23 @@ class App:
             stop.append(tr("после %d подсечек") % int(c["stop_after_hooks"]))
         if stop:
             lines.append(tr("Стоп: %s") % tr(" или ").join(stop) + (tr(", потом выключу ПК") if c["shutdown_after"] else ""))
+        if self.bait is not None and c["bait_watch"]:
+            lines.append(tr("Наживка: %s") % self.bait_text())
         if self.last_caught:
             lines.append(tr("Последний улов: %s") % self.last_caught)
         return lines
+
+    def bait_text(self):
+        """Наживка: само число и на сколько хватит (по среднему времени между подсечками) или хотя бы
+        порядок числа."""
+        if self.bait_count is None:
+            return {0: tr("нет"), 1: tr("меньше 10"), 2: "10–99"}.get(self.bait, "100+")
+        text = str(self.bait_count)
+        f = self.fisher
+        if f is not None and f.started and f.hooks >= 3 and self.bait_count:
+            left = self.bait_count * (time.time() - f.started) / f.hooks
+            text += tr(" (хватит на ~%s)") % fmt_left(left)
+        return text
 
     def refresh_mode(self):
         if getattr(self, "overlay", None) is not None:
@@ -1089,7 +1114,7 @@ class App:
                 parts.append(tr("биом: %s") % (g["ru"] if i18n.LANG == "ru" else g["en"]) +
                              (tr(" (авто)") if self.cfg["catch_biome"] == "auto" else ""))
         if self.bait is not None and self.cfg["bait_watch"]:
-            parts.append(tr("наживка: %s") % {0: tr("нет"), 1: tr("меньше 10"), 2: "10–99"}.get(self.bait, "100+"))
+            parts.append(tr("наживка: %s") % self.bait_text())
         self.gear_lbl.config(text=" · ".join(parts))
         if parts:                          # пустую строку не показываем — окно не растёт зря
             self.gear_lbl.pack(anchor="w")
@@ -1346,10 +1371,19 @@ class App:
                 self.last_caught = d["name"]
             self.show_gear(self.gear)
             self.refresh_mode()
+        elif kind == "zoom":                         # Zoom игры узнан по размеру поплавка
+            self.cfg["scale"] = d["scale"]
+            save_cfg(self.cfg)
+            if getattr(self, "zoom_var", None) is not None:
+                self.zoom_var.set("%d%%" % round(100 * d["scale"]))
         elif kind == "absent":
             self.absent = d["potions"]
             self.refresh_mode()
         elif kind == "bait":
+            if d.get("count") is not None:
+                self.bait_count = d["count"]
+            elif d["digits"] != self.bait:
+                self.bait_count = None             # число сменилось, а прочитать не вышло
             self.bait = d["digits"]
             self.show_gear(self.gear)
             self.refresh_mode()

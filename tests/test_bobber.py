@@ -51,13 +51,13 @@ class TestBobber(unittest.TestCase):
         self.assertTrue(best is None or best[0] < af.SPRITE_MIN + 0.05)
         self.assertLess(self.f.sprite_search(self.pier, only=["acc_glowing"])[0], af.SPRITE_MIN)
 
-    def auto_mark(self, before, after):
+    def auto_mark(self, before, after, k=1.0):
         H, W = after.shape[:2]
         screen = [before]
         sct = FakeSct(lambda: screen[0])
-        cl, player = (0, 0, W, H), (37, 25)
+        cl, player = (0, 0, W, H), (int(37 * k), int(25 * k))
         f = af.Fisher()
-        f.cast_point, f.park = (200, 150), (47, 5)
+        f.cast_point, f.park = (int(200 * k), int(150 * k)), (int(47 * k), int(5 * k))
         area = f.mark_area(cl, player)
         f.mark_before = sct.grab(area)[:, :, :3].astype(np.float32) if before is not None else None
         screen[0] = after
@@ -71,6 +71,19 @@ class TestBobber(unittest.TestCase):
                 self.assertLessEqual(abs(pos[0] - x), 3, "%s x=%d -> %s" % (z, x, pos))
                 self.assertLessEqual(abs(pos[1] - 102), 3, "%s x=%d -> %s" % (z, x, pos))
                 self.assertEqual(f.bobber_kind, "acc_glowing")
+
+    def test_auto_mark_learns_zoom(self):
+        # в игре Zoom 150 %, а в настройках 100 %: поплавок крупнее — программа узнаёт Zoom сама
+        import sprites
+        before = sprites.resize(self.pier, 1.5)
+        after = sprites.resize(with_bobber(self.pier, "025", 200), 1.5)
+        pos, f = self.auto_mark(before, after, k=1.5)
+        self.assertIsNotNone(pos)
+        self.assertEqual(f.scale, 1.5)
+        self.assertLessEqual(abs(pos[0] - 300), 5, pos)
+        # при верном Zoom масштаб не меняется
+        pos, f = self.auto_mark(self.pier, with_bobber(self.pier, "025", 200))
+        self.assertEqual(f.scale, 1.0)
 
     def test_auto_mark_nothing_new(self):
         pos, _ = self.auto_mark(self.pier, self.pier)
