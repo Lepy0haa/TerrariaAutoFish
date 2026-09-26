@@ -25,7 +25,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -37,7 +37,7 @@ DEFAULTS = {
     "sound": True, "hook_sound": False, "debug": False, "record": False, "win_pos": None,
     "lang": "auto", "auto_calib": True, "auto_recover": True, "auto_resume": True,
     "buffs_on": False, "buff_fishing": True, "buff_crate": True, "buff_key": "b",
-    "auto_rod": True, "auto_mark": True,
+    "auto_rod": True, "auto_mark": True, "rod_slot": "auto",
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -330,6 +330,8 @@ class App:
         af.AUTO_RECOVER = bool(self.cfg["auto_recover"])
         af.AUTO_RESUME = bool(self.cfg["auto_resume"])
         af.AUTO_ROD = bool(self.cfg["auto_rod"])
+        slot = str(self.cfg["rod_slot"])
+        af.ROD_SLOT = (int(slot) - 1) % 10 if slot.isdigit() else None
         af.AUTO_MARK = bool(self.cfg["auto_mark"])
         af.BUFFS_ON = bool(self.cfg["buffs_on"])
         af.BUFF_WANT = {"fishing": bool(self.cfg["buff_fishing"]), "crate": bool(self.cfg["buff_crate"])}
@@ -443,7 +445,7 @@ class App:
         self.buff_lbl.pack(anchor="w")
         self.show_buffs(None)
         self.gear_lbl = ttk.Label(st, text="", style="Muted.TLabel", wraplength=300, justify="left")
-        self.show_gear({"rod_slot": None, "rod": None, "bobber": None})
+        self.show_gear({"rod_slot": None, "manual": False, "bobber": None})
 
         vis = self.card(right, fill="x", pady=(6, 0))
         ttk.Label(vis, text=tr("Видно поплавка над водой (красная черта — порог)"),
@@ -580,6 +582,15 @@ class App:
         ttk.Label(box, text=tr("Удочка и поплавок"), style="Card.TLabel",
                   font=(FONT, 9, "bold")).pack(anchor="w")
         check("auto_rod", tr("Сам брать удочку в руки (если выбран другой слот хотбара)"))
+        row = ttk.Frame(box, style="Card.TFrame")
+        row.pack(fill="x", padx=(22, 0))
+        ttk.Label(row, text=tr("Слот удочки"), style="Card.TLabel").pack(side="left")
+        slots = [tr("Авто (запомню сам)")] + [str(i) for i in (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)]
+        self.rodslot_var = tk.StringVar(value=slots[0] if self.cfg["rod_slot"] == "auto" else str(self.cfg["rod_slot"]))
+        cb = ttk.Combobox(row, textvariable=self.rodslot_var, values=slots, state="readonly", width=24)
+        cb.pack(side="left", padx=(8, 0))
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_auto_opt(
+            "rod_slot", "auto" if self.rodslot_var.get() == slots[0] else self.rodslot_var.get()))
         check("auto_mark", tr("Сам находить поплавок после первого заброса (по картинкам с Terraria Wiki)"))
         ttk.Separator(box).pack(fill="x", pady=8)
 
@@ -618,6 +629,9 @@ class App:
         if key.startswith("buff"):
             self.fisher.last_buff_check = 0          # проверить при ближайшем забросе
             self.show_buffs(None)
+        if key in ("auto_rod", "rod_slot"):
+            self.fisher.rod_misses = 0
+            self.fisher.gear_changed()
 
     def buff_text(self, status):
         names = {"fishing": tr("рыбалки"), "crate": tr("ящиков")}
@@ -628,7 +642,7 @@ class App:
         parts = []
         if d.get("rod_slot") is not None:
             parts.append(tr("Удочка: слот %d") % ((d["rod_slot"] + 1) % 10) +
-                         (" (%s)" % d["rod"] if d.get("rod") else ""))
+                         (tr(" (задан)") if d.get("manual") else ""))
         if d.get("bobber"):
             parts.append(tr("поплавок: %s") % d["bobber"])
         self.gear_lbl.config(text=" · ".join(parts))
@@ -937,7 +951,7 @@ class App:
         self.q.put(("log", {"text": tr("Поклёвка (%s)! Подсекаю. Подсечек: %d (ждали %.1f с)")
                                     % (tr("видно 31% поплавка"), 12, 6.2), "kind": "good"}))
         self.q.put(("calib", {"ratio": 0.49, "casts": 6, "auto": True}))
-        self.q.put(("gear", {"rod_slot": 4, "rod": "Golden Fishing Rod", "bobber": "Glowing Fishing Bobber"}))
+        self.q.put(("gear", {"rod_slot": 4, "manual": False, "bobber": "Glowing Fishing Bobber"}))
         self.q.put(("live", {"seen": 88, "ref": 110, "ratio": 0.49, "frame": img, "t": 7.4,
                              "max_wait": 45, "flash": False, "auto": True}))
 

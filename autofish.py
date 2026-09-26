@@ -78,9 +78,9 @@ BUFF_BACKOFF = 300.0  # если выпить не получилось (кон�
 AUTO_ROD = True       # перед забросом брать удочку в руки (клавишей её слота в хотбаре)
 AUTO_MARK = True      # после первого заброса искать поплавок самому (по картинкам поплавков с Вики)
 SPRITE_MIN = 0.75     # насколько картинка на экране должна совпасть с поплавком с Вики
-ROD_SELECTED_MIN = 0.45   # в руках удочка, если выбранный слот похож на удочку хотя бы так
-ROD_OTHER_MIN = 0.5       # ...иначе ищем удочку в другом слоте: оценка не ниже этой
-ROD_MARGIN = 0.1          # ...и заметно лучше, чем у остальных слотов
+ROD_SLOT = None       # слот удочки: None — запоминать самому (по удачному забросу), 0..9 — задан вручную
+ROD_HINT_MIN = 0.5        # пока слот неизвестен: удочка по картинке — только если оценка не ниже этой
+ROD_HINT_MARGIN = 0.15    # ...и намного лучше, чем у всех остальных слотов (иконки мелкие, похожих много)
 SOUND = True          # пищать при старте, отметке, паузе
 # ==================================================================
 
@@ -445,7 +445,7 @@ class Fisher:
       points   {saved}                        — сохранены ли точка заброса и поплавок
       calib    {ratio, casts, auto}           — порог подсечки (автокалибровка)
       buffs    {status}                       — какие баффы есть: {"fishing": True, ...}
-      gear     {rod_slot, rod, bobber}        — слот удочки, какая удочка и какой поплавок (названия или None)
+      gear     {rod_slot, manual, bobber}     — слот удочки (0..9 или None), задан ли он вручную, вид поплавка
       hook     {why, waited}                  — подсечка
       notify   {title, text}                  — важное: пауза не по вашей команде, ошибка
     """
@@ -490,10 +490,11 @@ class Fisher:
                                                     names=sprites.BOBBER_NAMES)
         except Exception:
             self.rods = self.bobber_sprites = None
-        self.rod_slot = None               # в каком слоте хотбара удочка (0..9)
-        self.hotbar_u = 1.0                # масштаб интерфейса, при котором его запомнили
+        self.rod_slot = None               # в каком слоте хотбара удочка (0..9) — запоминаем по удачному забросу
+        self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
-        self.rod_name = None               # какая это удочка (ключ картинки) или None — не узнали
+        self.cast_slot = None              # какой слот был выбран при последнем забросе
+        self.switched = False              # на этом круге сами переключили слот
         self.bobber_kind = None            # какой поплавок (ключ картинки) или None — не узнали
         self.mark_before = None            # снимок места до первого заброса (для поиска поплавка)
         self.started = None                # когда начали рыбачить (для «подсечек в час»)
@@ -638,7 +639,7 @@ class Fisher:
         else:
             self.cast_point = get_cursor()
             self.mark = self.bobber = self.mark0 = self.bobber0 = None
-            self.rod_slot = self.rod_name = self.bobber_kind = None
+            self.bobber_kind = None
             self.gear_changed()
             self.phase, self.watched = "unknown", None
             self.calm_floors.clear()      # новое место — калибруемся заново
@@ -654,7 +655,7 @@ class Fisher:
         self.resume_on_focus = False
         self.stop_fishing(tr("Пауза: выбираем новые точки."), notify=False)
         self.cast_point = self.mark = self.bobber = self.mark0 = self.bobber0 = None
-        self.rod_slot = self.rod_name = self.bobber_kind = None
+        self.bobber_kind = None
         self.gear_changed()
         self.calm_floors.clear()
         self.calib_changed()
@@ -723,6 +724,12 @@ class Fisher:
         MAX_FAILS раз подряд, встать на паузу."""
         self.fails += 1
         self.stats()
+        if self.switched and ROD_SLOT is None and self.rod_slot is not None:
+            self.log(tr("Переключился на слот %d, но поплавка нет — может, удочка теперь в другом слоте? "
+                        "Забыл этот слот: возьмите удочку в руки, запомню заново.") % ((self.rod_slot + 1) % 10), "bad")
+            self.rod_slot = None
+            self.save_gear()
+            self.gear_changed()
         # Не кликаем вслепую: клик мог бы и вытащить, и забросить. Где поплавок — посмотрим
         # на следующем круге и тогда решим.
         self.phase, self.watched = "unknown", None
@@ -818,14 +825,45 @@ class Fisher:
 
     # ---------- удочка и поплавки с Вики ----------
     def gear_changed(self):
-        rods = sprite_names = None
-        if self.rods is not None:
-            rods = self.rods.rods
-        if self.bobber_sprites is not None:
-            sprite_names = self.bobber_sprites
-        self.emit("gear", rod_slot=self.rod_slot,
-                  rod=rods.title(self.rod_name) if rods and self.rod_name else None,
-                  bobber=sprite_names.title(self.bobber_kind) if sprite_names and self.bobber_kind else None)
+        names = self.bobber_sprites
+        self.emit("gear", rod_slot=self.rod_target() if AUTO_ROD else None, manual=ROD_SLOT is not None,
+                  bobber=names.title(self.bobber_kind) if names and self.bobber_kind else None)
+
+    def rod_target(self):
+        """Слот удочки: заданный в настройках или запомненный по удачному забросу (или None)."""
+        return ROD_SLOT if ROD_SLOT is not None else self.rod_slot
+
+    def gear_path(self):
+        return os.path.join(os.path.dirname(self.points_path), "gear.json") if self.points_path else None
+
+    def save_gear(self):
+        """Слот удочки храним отдельно от точек: хотбар не меняется, когда меняется место рыбалки."""
+        try:
+            if self.gear_path():
+                import json
+                with open(self.gear_path(), "w", encoding="utf-8") as fh:
+                    json.dump({"rod_slot": self.rod_slot}, fh)
+        except Exception:
+            pass
+
+    def load_gear(self):
+        try:
+            import json
+            with open(self.gear_path(), encoding="utf-8") as fh:
+                v = json.load(fh).get("rod_slot")
+            self.rod_slot = int(v) if v is not None and 0 <= int(v) <= 9 else None
+        except Exception:
+            self.rod_slot = None
+
+    def learn_rod(self):
+        """Поплавок в воде — значит, в руках удочка: запоминаем слот, который был выбран при забросе."""
+        if not AUTO_ROD or ROD_SLOT is not None or self.cast_slot is None or self.cast_slot == self.rod_slot:
+            return
+        self.rod_slot = self.cast_slot
+        self.save_gear()
+        self.gear_changed()
+        self.log(tr("Запомнил: удочка в слоте %d. Если в руках окажется другой предмет — возьму её сам.")
+                 % ((self.rod_slot + 1) % 10), "good")
 
     def sprite_scales(self):
         """Масштабы, в которых искать поплавок: около Zoom из настроек (игра не бывает мельче 100 %)."""
@@ -838,54 +876,43 @@ class Fisher:
         return grab(sct, region)
 
     def ensure_rod(self, sct, cl):
-        """Удочка должна быть в руках. Первый раз запоминаем её слот (обычно — тот, что выбран
-        при старте: с ним игрок и рыбачит), потом, если выбран другой слот, жмём цифру слота удочки.
+        """Удочка должна быть в руках: если выбран другой слот хотбара, жмём цифру слота удочки.
+        Слот удочки задан в настройках или запомнен по удачному забросу. Пока он неизвестен —
+        забрасываем тем, что в руках (а по картинке переключаемся, только если удочка узнаётся
+        очень уверенно: иконки в хотбаре мелкие, кнуты, мечи и кирки на них похожи).
         True — переключили предмет (значит, старый поплавок, если был, игра убрала)."""
-        if not AUTO_ROD or self.rods is None:
+        self.cast_slot, self.switched = None, False
+        if not AUTO_ROD:
             return False
         import hotbar
         frame = self.hotbar_frame(sct, cl)
-        if self.rod_slot is None:
-            r = self.rods.scores(frame)
-            if r is None:
-                return False                 # хотбара не видно (открыт инвентарь, карта…)
-            index, out = r
-            self.hotbar_u = hotbar.selected_slot(frame)[1]
-            self.rod_misses = 0
-            best = max(range(len(out)), key=lambda i: out[i][0])
-            others = [v for i, (v, _) in enumerate(out) if i != best]
-            if out[index][0] >= ROD_SELECTED_MIN:
-                self.rod_slot, self.rod_name = index, out[index][1]
-            elif (best != index and out[best][0] >= ROD_OTHER_MIN and
-                  out[best][0] - max(others, default=0) >= ROD_MARGIN):
-                self.rod_slot, self.rod_name = best, out[best][1]
-            else:
-                self.rod_slot, self.rod_name = index, None
-            if self.rod_name:
-                self.log(tr("Удочка: %s, слот %d.") % (self.rods.rods.title(self.rod_name), (self.rod_slot + 1) % 10))
-            else:
-                self.log(tr("Удочку по картинке не узнал — считаю, что она в слоте %d (он был выбран).")
-                         % ((self.rod_slot + 1) % 10))
-            self.gear_changed()
         sel = hotbar.selected_slot(frame)
-        # хотбар другого размера — значит, это не он (открыт инвентарь и т. п.): ничего не жмём
-        if sel is None or sel[0] == self.rod_slot or abs(sel[1] - self.hotbar_u) > 0.1:
+        if sel is None:
+            return False                     # хотбара не видно (открыт инвентарь, карта…)
+        if self.hotbar_u is None:
+            self.hotbar_u = sel[1]
+        elif abs(sel[1] - self.hotbar_u) > 0.1:
+            return False                     # хотбар другого размера — это не он: ничего не жмём
+        target = self.rod_target()
+        if target is None:
+            target = self.rod_hint(frame, sel[0])
+            if target is None:
+                self.cast_slot = sel[0]      # забросим тем, что в руках; удался заброс — запомним слот
+                return False
+            self.log(tr("Похоже, удочка в слоте %d (по картинке) — беру её.") % ((target + 1) % 10))
+        if sel[0] == target:
+            self.cast_slot = target
             return False
         if self.rod_misses >= 3:
             return False                     # переключить не получается — больше не пытаемся
-        # игрок сам взял удочку из другого слота? тогда запоминаем новый слот и ничего не жмём
-        r = self.rods.scores(frame)
-        if r is not None and r[1][sel[0]][0] >= ROD_SELECTED_MIN:
-            self.rod_slot, self.rod_name = sel[0], r[1][sel[0]][1]
-            self.log(tr("Удочка теперь в слоте %d.") % ((self.rod_slot + 1) % 10))
-            self.gear_changed()
-            return False
-        key = str((self.rod_slot + 1) % 10)
+        key = str((target + 1) % 10)
         press_key(key)
         time.sleep(0.3)
+        self.switched = True
         sel2 = hotbar.selected_slot(self.hotbar_frame(sct, cl))
-        if sel2 is not None and sel2[0] == self.rod_slot:
+        if sel2 is not None and sel2[0] == target:
             self.rod_misses = 0
+            self.cast_slot = target
             self.log(tr("В руках был другой предмет (слот %d) — взял удочку (слот %s).")
                      % ((sel[0] + 1) % 10, key), "good")
         else:
@@ -896,6 +923,20 @@ class Fisher:
                             "Возьмите удочку в руки сами."), "bad")
                 self.emit("notify", title=tr("Удочка"), text=tr("Не получается взять удочку. Возьмите её в руки сами."))
         return True
+
+    def rod_hint(self, frame, selected):
+        """Слот, где удочка узнаётся по картинке очень уверенно, или None."""
+        if self.rods is None:
+            return None
+        r = self.rods.scores(frame)
+        if r is None:
+            return None
+        out = [v for v, _ in r[1]]
+        best = max(range(len(out)), key=lambda i: out[i])
+        rest = max((v for i, v in enumerate(out) if i != best), default=0.0)
+        if best != selected and out[best] >= ROD_HINT_MIN and out[best] - rest >= ROD_HINT_MARGIN:
+            return best
+        return None
 
     def sprite_candidates(self, frame, n=8, changed=None):
         """Места, где может быть поплавок: пятна ярких цветов, не похожих на небо и воду
@@ -1308,6 +1349,10 @@ class Fisher:
                     pos = self.auto_mark(sct, cl, player)
                     if pos is None and not self.stopped():
                         self.log(tr("Сам поплавок не нашёл — покажите его, пожалуйста."))
+                        if AUTO_ROD and self.rod_target() is None and self.reset_name:
+                            self.log(tr("Если в руках не удочка — возьмите её, нажмите %s и начните заново "
+                                        "(%s на воде). Слот удочки запомню сам или задайте его на вкладке "
+                                        "«Автоматика».") % (self.reset_name, self.key_name), "ask")
                 if pos is None:
                     pos = self.ask_mark(sct, cl)
                 if pos is None:
@@ -1355,6 +1400,7 @@ class Fisher:
             return
         self.fails = self.recover_round = self.errors = 0
         self.phase, self.watched = "watching", (pos, first)
+        self.learn_rod()
         self.stats()
         if self.record:
             while not self.clicks.empty():
@@ -1485,6 +1531,9 @@ class Fisher:
             listener.daemon = True
             listener.start()
             self.listeners.append(listener)
+        if self.points_path:
+            self.load_gear()
+            self.gear_changed()
         if self.points_path and self.load_points():
             self.log(tr("Точки с прошлого запуска загружены. %s — продолжить.") % self.key_name, "good")
             self.emit("bobber", img=self.bobber)

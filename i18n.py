@@ -266,4 +266,18 @@ EN = {
     "Это %s.": "It's a %s.",
     "поплавок: %s": "bobber: %s",
     "Удочка: слот %d": "Rod: slot %d",
+    " (задан)": " (set)",
+    "Если в руках не удочка — возьмите её, нажмите %s и начните заново (%s на воде). Слот удочки запомню "
+    "сам или задайте его на вкладке «Автоматика».":
+        "If you're not holding the fishing rod, select it, press %s and start again (%s on the water). "
+        "I'll remember the rod slot, or you can set it on the Automation tab.",
+    "Слот удочки": "Fishing rod slot",
+    "Авто (запомню сам)": "Auto (I'll remember it)",
+    "Запомнил: удочка в слоте %d. Если в руках окажется другой предмет — возьму её сам.":
+        "Remembered: the fishing rod is in slot %d. If another item gets selected, I'll switch back to it.",
+    "Похоже, удочка в слоте %d (по картинке) — беру её.": "The fishing rod seems to be in slot %d (by its image) — taking it.",
+    "Переключился на слот %d, но поплавка нет — может, удочка теперь в другом слоте? "
+    "Забыл этот слот: возьмите удочку в руки, запомню заново.":
+        "Switched to slot %d, but there's no bobber — maybe the rod is in another slot now? "
+        "Forgot this slot: select the rod yourself and I'll remember it again.",
 }
