@@ -50,10 +50,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def fetch(url, tok):
-    """Скачать файл с API GitHub: он отвечает перенаправлением на хранилище, куда токен не нужен."""
+def fetch(url, tok, accept="application/vnd.github+json"):
+    """Скачать файл с API GitHub: он отвечает перенаправлением на хранилище, куда токен не нужен.
+    accept: для файлов релиза — application/octet-stream, для архивов автосборки — обычный."""
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + tok, "User-Agent": "TerrariaAutoFish",
-                                               "Accept": "application/octet-stream"})
+                                               "Accept": accept})
     try:
         with urllib.request.build_opener(_NoRedirect).open(req, timeout=600) as r:
             return r.read()
@@ -87,7 +88,7 @@ def files_from_dist(tag):
 
 
 def files_from_release(rel, tok):
-    return {a["name"]: fetch(a["url"], tok) for a in rel.get("assets", [])}
+    return {a["name"]: fetch(a["url"], tok, "application/octet-stream") for a in rel.get("assets", [])}
 
 
 def main():
