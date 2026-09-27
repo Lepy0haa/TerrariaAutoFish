@@ -133,5 +133,30 @@ class TestNoBiteReset(unittest.TestCase):
             for n, v in saved.items():
                 setattr(af, n, v)
 
+
+class TestSecondMonitor(unittest.TestCase):
+    def test_game_on_left_monitor(self):
+        # игра на мониторе слева от основного: координаты окна отрицательные
+        saved = {n: getattr(af, n) for n in ("REEL_DELAY", "HEALTH_GUARD", "BUFFS_ON")}
+        af.REEL_DELAY, af.HEALTH_GUARD, af.BUFFS_ON = 0.3, False, False
+        game = FakeGame(selected="5")
+        game.offset = (-1920, 120)
+        restore = game.install()
+        r = Run(game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            self.assertLessEqual(abs(r.fisher.mark[0] - (game.BX - 1920)), 6, r.fisher.mark)
+            time.sleep(0.8)
+            game.empty = True
+            self.assertTrue(r.wait_for(lambda: r.fisher.hooks == 1, 10), r.logs[-5:])
+            game.empty = False
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+        finally:
+            r.stop()
+            restore()
+            for n, v in saved.items():
+                setattr(af, n, v)
+
 if __name__ == "__main__":
     unittest.main()

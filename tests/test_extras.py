@@ -134,6 +134,13 @@ class TestDonate(unittest.TestCase):
             self.assertTrue(url.startswith("https://"), url)
 
 
+class TestScreens(unittest.TestCase):
+    def test_on_screen(self):
+        import app
+        self.assertTrue(app.on_screen(10, 10))                 # основной монитор
+        self.assertFalse(app.on_screen(-50000, -50000))        # монитора там нет (отключили)
+
+
 class TestHistory(unittest.TestCase):
     def test_days_and_periods(self):
         import datetime

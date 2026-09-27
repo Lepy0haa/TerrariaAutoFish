@@ -49,11 +49,13 @@ def hotbar(key):
 
 
 class FakeSct:
-    def __init__(self, screen):
+    def __init__(self, screen, offset=(0, 0)):
         self.screen = screen
+        self.ox, self.oy = offset                    # где окно игры на «рабочем столе»
 
     def grab(self, reg):
-        a = self.screen()[reg["top"]:reg["top"] + reg["height"], reg["left"]:reg["left"] + reg["width"]]
+        top, left = reg["top"] - self.oy, reg["left"] - self.ox
+        a = self.screen()[top:top + reg["height"], left:left + reg["width"]]
         return np.dstack([a, np.zeros(a.shape[:2])])
 
     def __enter__(self):
@@ -87,6 +89,7 @@ class FakeGame:
         self.drop_keys = 0                           # столько следующих нажатий игра пропустит
         self.pickup_life = 1.5                       # сколько секунд видна надпись о подборе
         self.shift = (0, 0)                          # мир сдвинулся на экране (персонажа сдвинуло)
+        self.offset = (0, 0)                         # окно игры на другом мониторе: (-1920, 0) и т.п.
         self.chat_text = None                        # сообщение в чате: (текст, цвет BGR)
         self.need_cast = None                        # поплавок сядет на воду, только если заброс сюда
         self.cast_at = None
@@ -145,6 +148,7 @@ class FakeGame:
         return np.roll(self._terrain, (dy, dx), axis=(0, 1))
 
     def click(self, x, y, hold=0.06):
+        x, y = x - self.offset[0], y - self.offset[1]
         with self.lock:
             if self.selected != "5":                 # в руках не удочка: клик — использовать предмет
                 self.used.append(self.selected)      # (зелье в слоте 9 — выпить)
@@ -176,12 +180,13 @@ class FakeGame:
         saved_mss = getattr(af.mss, "MSS", None)
         af.terraria_window = lambda: 1
         af.find_terraria = lambda: 1
-        af.client_rect = lambda h: (0, 0, self.W, self.H)
-        af.get_cursor = lambda: self.cursor
+        ox, oy = self.offset
+        af.client_rect = lambda h: (ox, oy, ox + self.W, oy + self.H)
+        af.get_cursor = lambda: (self.cursor[0] + ox, self.cursor[1] + oy)
         af.set_cursor = lambda x, y: None
         af.click = self.click
         af.press_key = self.press_key
-        af.mss.MSS = lambda: FakeSct(self.screen)
+        af.mss.MSS = lambda: FakeSct(self.screen, self.offset)
 
         def restore():
             for n, v in saved.items():

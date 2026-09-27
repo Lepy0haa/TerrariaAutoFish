@@ -4,6 +4,7 @@ Terraria AutoFish — приложение с окном, оверлеем по�
 """
 import base64
 import ctypes
+import ctypes.wintypes as wt
 import json
 import os
 import queue
@@ -192,6 +193,15 @@ def load_cfg():
 SELFTEST = False                           # самопроверка сборки: настройки игрока не трогаем
 
 
+def on_screen(x, y):
+    """Есть ли монитор в точке (x, y) рабочего стола (мониторов может быть несколько, левый —
+    с отрицательными координатами)."""
+    try:
+        return bool(ctypes.windll.user32.MonitorFromPoint(wt.POINT(int(x), int(y)), 0))   # 0 — не искать ближайший
+    except Exception:
+        return True
+
+
 def ghost(win):
     """Окно самопроверки: невидимое, клики проходят сквозь него, фокус не забирает. Пока идёт
     самопроверка, игрок может рыбачить: окно не должно мешать ни игре, ни кликам рыбалки."""
@@ -286,7 +296,7 @@ class Overlay(tk.Toplevel):
             w.bind("<ButtonRelease-1>", self.drag_end)
         self.update_idletasks()
         pos = app.cfg.get("overlay_pos")
-        if not pos:
+        if not pos or not on_screen(pos[0] + 20, pos[1] + 10):
             pos = (20, self.winfo_screenheight() - 170)
         self.geometry("+%d+%d" % tuple(pos))
         if app.selftest:
@@ -421,10 +431,11 @@ class App:
         self.root.update_idletasks()
         w, h = self.root.winfo_reqwidth(), self.root.winfo_reqheight()
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        x, y = self.cfg.get("win_pos") or ((sw - w) // 2, max(0, (sh - h) // 3))
-        x = max(0, min(int(x), sw - w))
-        y = max(0, min(int(y), sh - h - 60))
-        self.root.geometry("+%d+%d" % (x, y))
+        pos = self.cfg.get("win_pos")
+        # оставили на мониторе, которого сейчас нет (отключили), — открываем на основном
+        if not pos or not on_screen(pos[0] + 40, pos[1] + 10):
+            pos = ((sw - w) // 2, max(0, (sh - h) // 3))
+        self.root.geometry("+%d+%d" % (int(pos[0]), int(pos[1])))
 
     def dark_titlebar(self):
         try:
