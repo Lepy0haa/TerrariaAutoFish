@@ -3,7 +3,7 @@ rem Builds the program (folder TerrariaAutoFish: exe + _internal), the installer
 rem and puts the fresh program (TerrariaAutoFish.exe + _internal) into the project folder (if it is not running).
 rem Requires Python 3.10+. "build.bat --no-pause" does not wait for a key at the end (automatic builds).
 cd /d "%~dp0"
-set VER=1.6.1
+set VER=1.6.2
 set NOPAUSE=
 if "%~1"=="--no-pause" set NOPAUSE=1
 set WORK=%~dp0dist\_build

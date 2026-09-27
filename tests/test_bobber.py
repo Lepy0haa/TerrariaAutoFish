@@ -57,6 +57,28 @@ class TestBobber(unittest.TestCase):
         self.assertIsNotNone(pos)
         self.assertLessEqual(abs(pos[0] - 119), 4, pos)
 
+    def test_golden_rod_bobber_at_night(self):
+        # из игры: ночью поплавок золотой удочки тусклый и сидит глубоко — раньше вместо него
+        # выбиралось пустое место у персонажа («лавовый мох», 0.83)
+        frame = load_bgr("bobber", "golden_night.png", down=2)
+        best = self.f.sprite_search(frame, n=af.MARK_CANDIDATES, near=(328, 120))
+        self.assertEqual(best[3], "golden")
+        self.assertGreaterEqual(best[0], af.SPRITE_MIN)
+        self.assertLessEqual(abs(best[1] - 319), 4)
+
+    def test_sunk_bobber_is_not_replaced_by_something_near_the_player(self):
+        # из игры: поплавок механической удочки не виден — раньше находилось существо у персонажа
+        frame = load_bgr("bobber", "sunk_in_shimmer.png", down=2)
+        best = self.f.sprite_search(frame, n=af.MARK_CANDIDATES, near=(349, 120))
+        self.assertTrue(best is None or best[0] < af.SPRITE_MIN, best)
+
+    def test_throw_penalty(self):
+        p = af.Fisher.throw_penalty
+        self.assertEqual(p(330, 330, 120), 0.0)                  # под курсором
+        self.assertEqual(p(600, 330, 120), 0.0)                  # дальше курсора (быстрая удочка)
+        self.assertAlmostEqual(p(20, 330, 120), af.NEAR_PENALTY) # позади игрока
+        self.assertAlmostEqual(p(120, 330, 120), af.NEAR_PENALTY)
+
     def test_empty_water(self):
         best = self.f.sprite_search(load_bgr("bobber", "027_poisk_net.png", down=4))
         self.assertTrue(best is None or best[0] < af.SPRITE_MIN)

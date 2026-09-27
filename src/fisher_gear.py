@@ -285,28 +285,59 @@ class GearMixin:
             sums[max(0, y - th):y + th, max(0, x - tw):x + tw] = -1
         return out
 
-    def sprite_search(self, frame, only=None, changed=None, n=8):
-        """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ, масштаб) или None."""
+    def sprite_search(self, frame, only=None, changed=None, n=8, near=None):
+        """Поплавок по картинкам с Вики: (оценка, центр x, центр y, ключ, масштаб) или None.
+        near — (x точки заброса, x игрока) в кадре: поплавок летит от игрока в сторону курсора
+        (быстрые удочки — и дальше него), поэтому место рядом с игроком или позади него
+        сомнительно: оценка уменьшается до NEAR_PENALTY.
+        При первом автопоиске (zoom_probe) все масштабы проверяются только у трёх лучших мест."""
         if self.bobber_sprites is None:
             return None
+        probe, self.zoom_probe = self.zoom_probe, False      # 1-й проход — в обычных масштабах
+        try:
+            found = self._sprite_scores(frame, self.sprite_candidates(frame, n, changed), only, near)
+        finally:
+            self.zoom_probe = probe
+        if probe and found:
+            top = sorted(found, key=lambda r: -r[0])[:3]
+            found = self._sprite_scores(frame, [(r[1], r[2]) for r in top], only, near) or found
+        return max(found, key=lambda r: r[0]) if found else None
+
+    @staticmethod
+    def throw_penalty(bx, cast_x, player_x):
+        """Насколько место bx сомнительно для первого заброса: поплавок улетает от игрока в сторону
+        курсора хотя бы на полпути; ближе к игроку (или позади него) — штраф до NEAR_PENALTY."""
+        way = cast_x - player_x
+        if abs(way) < 1:
+            return 0.0
+        along = (bx - player_x) / float(way)          # 0 — у игрока, 1 — под курсором, >1 — дальше
+        return A.NEAR_PENALTY * min(1.0, max(0.0, (0.5 - along) / 0.5))
+
+    def _sprite_scores(self, frame, spots, only, near):
         k = max(self.sprite_scales()) / self.scale      # запас под самый крупный масштаб
         pad_x, pad_y = int((self.tw + 8 * self.scale) * k), int((self.th + 8 * self.scale) * k)
-        best = None
-        for cx, cy in self.sprite_candidates(frame, n, changed):
+        out = []
+        for cx, cy in spots:
             x0, y0 = max(0, cx - pad_x), max(0, cy - pad_y)
             patch = frame[y0:cy + pad_y, x0:cx + pad_x]
             r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only)
-            if r and (best is None or r[0] > best[0]):
-                v, x, y, w, h, key, s = r
-                best = (v, x0 + x + w // 2, y0 + y + h // 2, key, s)
-        return best
+            if not r:
+                continue
+            v, x, y, w, h, key, s = r
+            bx, by = x0 + x + w // 2, y0 + y + h // 2
+            if near is not None:
+                v -= self.throw_penalty(bx, *near)
+            out.append((v, bx, by, key, s))
+        return out
 
     def mark_area(self, cl, player):
-        """Где искать поплавок после первого заброса: между игроком и точкой заброса и чуть дальше."""
+        """Где искать поплавок после первого заброса: между игроком и точкой заброса и дальше в
+        сторону заброса — быстрые удочки (золотая, механическая) бросают дальше курсора."""
         s = self.scale
         cx, cy = self.cast_point
-        x0 = max(cl[0], min(player[0], cx) - int(120 * s))
-        x1 = min(cl[2], max(player[0], cx) + int(160 * s))
+        right = cx >= player[0]
+        x0 = max(cl[0], min(player[0], cx) - int((120 if right else A.THROW_BEYOND) * s))
+        x1 = min(cl[2], max(player[0], cx) + int((A.THROW_BEYOND if right else 120) * s))
         y0 = max(cl[1], min(player[1], cy) - int(160 * s))
         y1 = min(cl[3], max(player[1], cy) + int(120 * s))
         if x1 - x0 < 3 * self.tw or y1 - y0 < 3 * self.th:
@@ -331,6 +362,7 @@ class GearMixin:
             return None
         x0, y0 = area["left"], area["top"]
         frame = A.grab(sct, area)
+        near = (self.cast_point[0] - x0, player[0] - x0)   # поплавок летит от игрока в сторону курсора
         before = self.mark_before
         if before is not None and before.shape != frame.shape:
             before = None
@@ -345,11 +377,11 @@ class GearMixin:
             # главное: поплавок появился только после заброса. Пирс, столбы, NPC и прочее
             # яркое стоят на месте — среди изменившегося их нет
             changed = np.abs(frame - before).max(2) > 30
-            best = self.sprite_search(frame, changed=changed, n=10)
+            best = self.sprite_search(frame, changed=changed, n=A.MARK_CANDIDATES, near=near)
         if best is None or best[0] < A.SPRITE_MIN:
             # снимка до заброса нет или новое не похоже на поплавок — ищем среди всего яркого,
             # но строже (там больше похожего)
-            other = self.sprite_search(frame)
+            other = self.sprite_search(frame, n=A.MARK_CANDIDATES, near=near)
             if other is not None and other[0] >= A.SPRITE_MIN + 0.05 and (best is None or other[0] > best[0]):
                 best = other
         self.n += 1
