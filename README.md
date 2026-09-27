@@ -310,7 +310,7 @@ taken from `docs/releases/<tag>.md`).
 
 ### Tests
 
-`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 114 tests in about four and a half minutes, most of them on
+`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 115 tests in about four and a half minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
 taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
@@ -348,7 +348,7 @@ changes nothing in the program:
 - **[Boosty](https://boosty.to/lepyoha/donate)** — the author's page, works from abroad too (you need to sign in to Boosty);
 - **[CloudTips](https://pay.cloudtips.ru/p/b2e68ed6)** — by card, no sign-up, Russian bank cards only.
 
-The same links are behind the **☕ Support** button on the Settings tab and in the tray menu.
+The same links are behind the orange **☕ Support the author** button at the top of the window, in the catch report and in the tray menu.
 
 ## Important
 

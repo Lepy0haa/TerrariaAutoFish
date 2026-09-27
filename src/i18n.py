@@ -591,6 +591,7 @@ EN = {
     "Boosty — страница автора": "Boosty — author page",
     "российские карты, без регистрации": "Russian bank cards only, no sign-up",
     "в том числе из-за рубежа; нужно войти в Boosty": "works from abroad too; you need to sign in to Boosty",
+    'Программа поймала для вас уже %d рыб и предметов! Если она помогает — поддержите автора: кнопка «☕ Поддержать автора» вверху.': 'The program has already caught %d fish and items for you! If it helps, support the author: the ☕ Support the author button at the top.',
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

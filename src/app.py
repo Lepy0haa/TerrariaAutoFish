@@ -47,7 +47,7 @@ DEFAULTS = {
     "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
     "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
     "potion_remind": True, "events_stop": True, "death_stop": True,
-    "update_check": True,
+    "update_check": True, "donate_nudged": 0,
     "overlay_alpha": 90, "overlay_font": "normal", "overlay_mode": True, "overlay_hide_paused": False,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
@@ -64,6 +64,7 @@ C = {
 STATE_COLOR = {"idle": C["muted"], "cast": C["blue"], "search": C["blue"], "mark": C["yellow"],
                "wait": C["green"], "hook": C["orange"], "pause": C["red"]}
 FONT = "Segoe UI"
+DONATE_NUDGES = (100, 500, 1000, 2500, 5000, 10000, 25000, 50000)   # на этих числах улова — напомнить
 
 # Уведомления Windows показываем через встроенный PowerShell (без сторонних библиотек)
 AUMID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
@@ -510,6 +511,8 @@ class App:
               foreground=[("disabled", C["muted"])])
         s.configure("Accent.TButton", background=C["green"], foreground="#0d1a13")
         s.map("Accent.TButton", background=[("active", "#35b87d"), ("disabled", C["panel"])])
+        s.configure("Donate.TButton", background=C["orange"], foreground="#1f1305", font=(FONT, 9, "bold"))
+        s.map("Donate.TButton", background=[("active", "#ffb468")])
         s.configure("TCheckbutton", background=C["panel"], foreground=C["text"], padding=1)
         s.map("TCheckbutton", background=[("active", C["panel"])],
               indicatorcolor=[("selected", C["green"]), ("!selected", C["panel2"])])
@@ -535,6 +538,10 @@ class App:
         inner.pack(fill="x", padx=10, pady=6)
         self.dot = tk.Canvas(inner, width=18, height=18, bg=C["panel"], highlightthickness=0)
         self.dot.pack(side="left", padx=(0, 8))
+        import donate
+        if donate.LINKS:                          # поддержать автора — на виду, на любой вкладке
+            ttk.Button(inner, text=tr("☕ Поддержать автора"), style="Donate.TButton",
+                       command=self.show_donate).pack(side="right", padx=(8, 0))
         col = tk.Frame(inner, bg=C["panel"])
         col.pack(side="left", fill="x", expand=True)
         self.state_lbl = tk.Label(col, text=tr("Готов"), bg=C["panel"], fg=C["text"], font=(FONT, 12, "bold"),
@@ -730,12 +737,6 @@ class App:
         self.update_btn = ttk.Button(bf, text=tr("Обновления"), command=self.on_update_btn)
         self.update_btn.pack(side="right", padx=(0, 6))
         self.show_update_btn()
-        import donate
-        if donate.LINKS:                          # ссылки на пожертвования есть — есть и кнопка
-            row += 1
-            bf2 = ttk.Frame(box, style="Card.TFrame")
-            bf2.grid(row=row, column=0, columnspan=2, sticky="we", pady=(6, 0))
-            ttk.Button(bf2, text=tr("☕ Поддержать"), command=self.show_donate).pack(side="right")
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -952,6 +953,10 @@ class App:
         bar.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(bar, text=tr("Закрыть"), command=win.destroy).pack(side="right")
         ttk.Button(bar, text=tr("Сохранить CSV"), command=self.save_catch_csv).pack(side="right", padx=(0, 6))
+        import donate
+        if donate.LINKS:
+            ttk.Button(bar, text=tr("☕ Поддержать автора"), style="Donate.TButton",
+                       command=self.show_donate).pack(side="left")
 
         def refresh():
             if not win.winfo_exists():
@@ -1086,6 +1091,26 @@ class App:
             ttk.Label(frame, text=tr("Сохранено: %s") % d["path"], style="Muted.TLabel", wraplength=440,
                       justify="left").pack(anchor="w", pady=(8, 0))
         ttk.Button(win, text=tr("Закрыть"), command=win.destroy).pack(anchor="e", padx=8, pady=(0, 8))
+
+    def donate_nudge(self):
+        """Круглое число пойманного за всё время (100, 500, 1000…) — одна строка в журнале и одно
+        уведомление: можно поддержать автора. На каждое число — один раз."""
+        import donate
+        if not donate.LINKS or self.selftest:
+            return
+        t = self.history.totals("all")
+        total = sum(t["items"].values()) + t["unknown"]
+        done = int(self.cfg.get("donate_nudged") or 0)
+        reached = [m for m in DONATE_NUDGES if done < m <= total]
+        if not reached:
+            return
+        self.cfg["donate_nudged"] = reached[-1]
+        save_cfg(self.cfg)
+        text = tr("Программа поймала для вас уже %d рыб и предметов! Если она помогает — поддержите автора: "
+                  "кнопка «☕ Поддержать автора» вверху.") % reached[-1]
+        self.add_log(text, "good")
+        if self.cfg["toasts"]:
+            toast(APP, text)
 
     def show_donate(self):
         """Поддержать автора: короткое спасибо и кнопки страниц пожертвований (открываются в браузере)."""
@@ -1610,6 +1635,7 @@ class App:
             self.catch_info = d
             if d.get("caught"):
                 self.history.add_catch(d.get("id"))
+                self.donate_nudge()
             elif not d.get("wanted", True):
                 self.history.add_skip()           # отпустили по сонару
             if d.get("caught") and d.get("name"):

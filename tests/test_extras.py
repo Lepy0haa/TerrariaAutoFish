@@ -127,6 +127,26 @@ class TestDownload(unittest.TestCase):
 
 
 class TestDonate(unittest.TestCase):
+    def test_nudge_once_per_milestone(self):
+        import app
+        import history
+
+        class Fake:
+            selftest = None
+        f = Fake()
+        f.history, f.cfg, f.logs = history.History(None), dict(app.DEFAULTS, toasts=False), []
+        f.add_log = lambda text, kind="info": f.logs.append(text)
+        for _ in range(99):
+            f.history.add_catch(2315)
+        app.App.donate_nudge(f)
+        self.assertEqual(f.logs, [])                              # 99 — ещё рано
+        f.history.add_catch(2315)
+        app.App.donate_nudge(f)
+        app.App.donate_nudge(f)
+        self.assertEqual(len(f.logs), 1)                          # на 100 — одна строка
+        self.assertIn("100", f.logs[0])
+        self.assertEqual(f.cfg["donate_nudged"], 100)
+
     def test_links(self):
         import donate
         for name, url, note, lang in donate.LINKS:
