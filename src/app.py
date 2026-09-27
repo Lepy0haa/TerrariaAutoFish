@@ -1103,7 +1103,7 @@ class App:
                                  "это добровольно и ни на что в программе не влияет."),
                   style="Muted.TLabel", wraplength=340, justify="left").pack(anchor="w", pady=(6, 10))
         for name, url in donate.LINKS:
-            ttk.Button(frame, text=name, command=lambda u=url: webbrowser.open(u)).pack(fill="x", pady=2)
+            ttk.Button(frame, text=tr(name), command=lambda u=url: webbrowser.open(u)).pack(fill="x", pady=2)
         ttk.Button(win, text=tr("Закрыть"), command=win.destroy).pack(anchor="e", padx=8, pady=(0, 8))
 
     def open_data(self):
