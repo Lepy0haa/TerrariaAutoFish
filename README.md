@@ -65,7 +65,9 @@ catch names match what the game writes.
   bobber, stats, an event log, a small window over the game (with the current mode: what is caught,
   biome, potions, what is watched, when to stop, bait, the last catch), Windows notifications, a tray
   icon and a short first-run guide (**F1**). Checks for a new version once a day and updates in one
-  click.
+  click (the installed and the portable version). **Diagnostics** checks everything at once, and
+  **Something's wrong** saves the last pictures and the log for analysis. Works on a second monitor;
+  while waiting for a bite it takes 60 pictures a second — as many as the game draws.
 - **Two languages** — English and Russian.
 
 ## Download
@@ -114,14 +116,18 @@ program just press **HOME** (if your character hasn't moved).
 - **Bobber visible above water** — green bar: everything is calm; when the bar drops below the
   red line, it's a bite and the program hooks.
 - **Stats** — hooks, casts, hooks per hour, running time, failed casts in a row, potions, the rod's
-  hotbar slot and the recognized bobber.
+  hotbar slot and the recognized bobber, bait, the program's CPU load.
+- **⚑ Something's wrong** — if the program did something strange, press it: the last 60 search,
+  bite and text pictures (kept in memory even with debug pictures off), a screenshot of the game
+  window, the end of the log and the settings are saved to `data\reports\mistake_….zip` — send it.
 - **Log** — all events. Green — good, red — pause/problems, yellow — your action is needed.
 
 The small window over the game shows the same things briefly, and below the bar — the mode: what is
 caught (everything or only checked with the Sonar Potion) and in which biome, the Angler quest,
 potions (and which aren't in the hotbar), what is watched (damage, bait, full inventory, events,
 death), when to stop, how much bait is left and the last catch. Drag it with the mouse; clicking it
-does not take focus away from the game.
+does not take focus away from the game. In Settings you can change its opacity and text size, turn
+the mode block off and hide it while fishing is paused.
 
 <img src="docs/overlay-en.png" alt="Overlay">
 
@@ -135,10 +141,11 @@ does not take focus away from the game.
 | Sensitivity | Hook when less than this share of the bobber is visible. Used until auto-calibration has learned (and always if it is off) |
 | Auto-calibration | The threshold is tuned automatically (recommended) |
 | Wait for a bite | After this time without a bite — reel in and cast again |
-| Small window, notifications, sounds | Ways to know what's happening |
+| Small window, notifications, sounds | Ways to know what's happening; for the small window — opacity, text size, the mode block, hide when paused |
 | Save debug pictures | Pictures of every search and hook in the `data\debug` folder — for troubleshooting |
 | Record mode | The program casts, you hook yourself; it records how the bobber behaved (`data\record` folder) |
-| Updates | Checks right away whether there is a newer version on GitHub (it also checks by itself once a day; only the public information about the latest release is read). If there is, the button becomes **Update to X**: it downloads the installer of the new version (the size is checked), starts it and closes the program so the installer can replace the files; settings and points are kept. The portable version opens the release page instead |
+| Updates | Checks right away whether there is a newer version on GitHub (it also checks by itself once a day; only the public information about the latest release is read). If there is, the button becomes **Update to X**: it downloads the installer of the new version (the size is checked), starts it and closes the program so the installer can replace the files; settings and points are kept. The portable version downloads its zip, closes, replaces its files (`settings` and `data` are kept) and starts again |
+| Diagnostics | In 3 s (switch to the game) checks everything needed for fishing: the game window, the hotbar and interface scale, the fishing rod and bait, potions in the hotbar and active buffs, health hearts, Windows text recognition languages, item names from the game, Zoom and saved points — each with what to do. The result is shown and saved to `data\diagnostics_….txt` (and added to the report) |
 | Collect a report | Packs the logs, settings, latest debug pictures, hotbar snapshots and system info into `report_….zip` in the `data` folder — send it when something goes wrong. The log is also written to `data\logs` (kept for 14 days) |
 
 ### Automation tab
@@ -168,7 +175,7 @@ hold the potions.
 |---|---|
 | Choose the catch using the Sonar Potion | When a fish bites, the Sonar Potion shows its name above the bobber. The program reads it and hooks only what is checked; otherwise it lets it go and waits for the next bite. If it can't read the name — it hooks (nothing valuable is lost) |
 | Angler quest | Today's quest fish. It is always hooked (even if unchecked in the lists); as soon as it's caught, fishing pauses and you get a notification |
-| Catch report | What was caught (by the pickup text) **this session, today, in 7 days or all time**: name, how many, where it lives; hooks, recognized / not recognized, let go by sonar, hooks per hour, days of fishing. **Save CSV** writes it to a file. The history is kept by day in `catch_history.json` next to the settings |
+| Catch report | What was caught (by the pickup text) **this session, today, in 7 days or all time**: name, how many, where it lives; hooks, recognized / not recognized, let go by sonar, hooks per hour, days of fishing; crates, rare items and the biome that gave the most; bar charts of the catch over 14 days and by hour of day. **Save CSV** writes it to a file. The history is kept by day and hour in `catch_history.json` next to the settings |
 | Fishing in | The biome whose list is used. **Auto** — guessed by what bites (Sonar) and by what is caught: after every hook the program reads the pickup text above the character, so the biome is recognized even without the Sonar Potion (e.g. Neon Tetra means the Jungle). Caught items are also written to the log |
 | List | The catches of each biome (from the Terraria Wiki, with "hardmode" marks), plus Crates, Rare items and Junk that can be caught anywhere. "All" / "None" check or clear the whole list |
 
@@ -257,6 +264,9 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 
 ## Troubleshooting
 
+Start with **Diagnostics** (Settings tab) — it shows what's wrong and what to do. If the program did
+something strange, press **⚑ Something's wrong** on the Fishing tab and send the saved archive.
+
 | Problem | Solution |
 |---|---|
 | Hooks without a bite | Turn auto-calibration on, or lower the sensitivity (e.g. 45%) |
@@ -300,7 +310,7 @@ taken from `docs/releases/<tag>.md`).
 
 ### Tests
 
-`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 104 tests in about four minutes, most of them on
+`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 114 tests in about four and a half minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
 taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
@@ -315,7 +325,7 @@ bait numbers, and check that every message is translated to English.
 | `src/app.py` | The program with a window, overlay and notifications |
 | `src/autofish.py` | Fishing engine: settings, control, the main loop; console version |
 | `src/vision.py`, `src/fisher_gear.py`, `src/fisher_search.py`, `src/fisher_extras.py`, `src/fisher_catch.py` | Parts of the engine: image analysis and bite detection; rod and bobber marking; bobber search; health, death, events, limits, potions; catch (sonar, pickup text, inventory, Angler quest) |
-| `src/sceneshift.py`, `src/chat.py`, `src/history.py` | A moved picture; events in chat; catch history |
+| `src/sceneshift.py`, `src/chat.py`, `src/history.py`, `src/diagnose.py`, `src/donate.py` | A moved picture; events in chat; catch history; diagnostics; donation pages |
 | `src/textmemory.py`, `src/updates.py`, `src/tray.py`, `src/wizard.py` | Name memory for catch recognition; updates; tray icon; first-run guide |
 | `src/buffs.py`, `src/pngread.py` | Buff recognition |
 | `src/catches.py`, `src/sonar.py`, `src/ocr.py`, `src/gamenames.py` | Choosing the catch by the Sonar Potion: catches of every biome, reading the text, Windows text recognition, item names from the installed game |
