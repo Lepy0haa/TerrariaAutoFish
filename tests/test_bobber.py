@@ -163,6 +163,77 @@ class TestBobber(unittest.TestCase):
         self.assertIsNotNone(pos)
         self.assertLessEqual(abs(pos[0] - 190), 3)
 
+    def test_golden_rod_bobber_while_probing_zoom(self):
+        # из игры: при первом автопоиске («Zoom сам») розовая кромка воды в Zoom 125 % давала 0.805,
+        # а настоящий поплавок золотой удочки — 0.799. Кромка — полоса: левее и правее так же похоже
+        frame = load_bgr("bobber", "golden_night.png", down=2)
+        f = af.Fisher()
+        f.zoom_probe = True
+        best = f.sprite_search(frame, n=af.MARK_CANDIDATES, near=(328, 120))
+        self.assertEqual(best[3], "golden")
+        self.assertLessEqual(abs(best[1] - 319), 4)
+
+    def test_ridge_penalty(self):
+        import sprites
+        sc = np.zeros((5, 60))
+        sc[2, 30] = 0.9
+        self.assertEqual(sprites.ridge_penalty(sc, 30, 2, 14), 0.0)      # отдельное место
+        sc[2, :] = 0.85
+        sc[2, 30] = 0.9
+        self.assertAlmostEqual(sprites.ridge_penalty(sc, 30, 2, 14), 0.15)   # полоса
+
+    def test_plain_bobbers_found_and_watched(self):
+        # у поплавков армированной удочки, «Ловца душ» и «Сидящей утки» почти нет ярких цветов —
+        # раньше их не было среди мест для проверки, а слежение видело 0 пикс.
+        pier = self.pier
+        for key in ("reinforced", "fisher_of_souls", "sitting_duck", "wood"):
+            for x in (200, 235):
+                scene, (cx, cy) = sprite_on_water(pier, key, x, 107)
+                f = af.Fisher()
+                f.zoom_probe = True
+                changed = np.abs(scene - pier).max(2) > 30
+                best = f.sprite_search(scene, changed=changed, n=af.MARK_CANDIDATES)
+                self.assertIsNotNone(best, key)
+                self.assertGreaterEqual(best[0], af.SPRITE_MIN, (key, best))
+                self.assertLessEqual(abs(best[1] - cx), 6, (key, x, best))
+                w = af.rect_around((cx, cy), f.tw // 2 + f.track_rx, f.th // 2 + f.track_ry)
+                cut = lambda im: im[w["top"]:w["top"] + w["height"], w["left"]:w["left"] + w["width"]]
+                det, base = f.watch_palette(cut(scene), 1)
+                self.assertGreaterEqual(base, f.min_bobber_px, (key, x))
+                self.assertLessEqual(det.visible(cut(pier)), f.min_bobber_px, (key, x))   # без поплавка — не видно
+
+    def test_watch_palette_drops_water_colors(self):
+        # цвета, которые есть и вдали от поплавка (переливы воды), не должны попадать в палитру
+        f = af.Fisher()
+        first = np.zeros((58, 38, 3), np.float32)
+        first[:, :] = (40, 30, 20)
+        first[30:, :] = (120, 40, 160)                     # вода
+        first[22:30, 14:24] = (240, 240, 240)              # поплавок (серый-белый)
+        first[31:33, :] = (200, 90, 230)                   # светлая полоса у поверхности по всей ширине
+        box = (f.track_rx, f.track_ry, f.tw, f.th)
+        pal = af.bobber_palette(first, box, 1, gray=True)
+        kept = f.own_colors(pal, first, box)
+        self.assertTrue(any((np.abs(kept - (240, 240, 240)) <= af.COLOR_TOL).all(1)))
+        self.assertFalse(any((np.abs(kept - (200, 90, 230)) <= af.COLOR_TOL).all(1)))
+
+
+def sprite_on_water(scene, key, x, surf, sub=0.45):
+    """Поплавок key (картинка с Вики) на кромке воды сцены: центр по x, доля sub снизу — под
+    полупрозрачной водой."""
+    from pngread import read_png
+    rgba = read_png(os.path.join(os.path.dirname(DATA), "..", "assets", "bobbers", key + ".png")).astype(np.float32)
+    ys, xs = np.nonzero(rgba[:, :, 3] > 0)
+    rgba = rgba[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    h, w = rgba.shape[:2]
+    out = scene.copy()
+    top, x0 = int(surf - h * (1 - sub)), x - w // 2
+    reg = out[top:top + h, x0:x0 + w]
+    bgr = rgba[:, :, 2::-1]
+    a = (rgba[:, :, 3:] > 127).astype(np.float32)
+    below = (np.arange(h)[:, None, None] + top) >= surf
+    reg[:] = np.where(below, bgr * 0.5 + reg * 0.5, bgr) * a + reg * (1 - a)
+    return out, (x, top + h // 2)
+
 
 if __name__ == "__main__":
     unittest.main()

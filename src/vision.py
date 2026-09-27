@@ -52,18 +52,21 @@ def _background(frame, far_side):
     bg = np.concatenate([edge.reshape(-1, 3), frame[:3].reshape(-1, 3), frame[-3:].reshape(-1, 3)])
     return edge, np.unique((bg // 4) * 4, axis=0)
 
-def _pick_colors(px, bg, k):
+def _pick_colors(px, bg, k, gray=False):
+    """Цвета из px, далёкие от фона bg и насыщенные. gray — и серые (белые, чёрные): у поплавков
+    армированной удочки, «Ловца душ», «Сидящей утки» насыщенных цветов почти нет."""
     if not len(px):
         return px
     far = np.abs(px[:, None] - bg[None]).max(2).min(1) > A.BG_DIST * k
-    vivid = (px.max(1) - px.min(1)) > A.SAT_MIN * k
-    return np.unique((px[far & vivid] // 4) * 4, axis=0)
+    if not gray:
+        far &= (px.max(1) - px.min(1)) > A.SAT_MIN * k
+    return np.unique((px[far] // 4) * 4, axis=0)
 
-def template_palette(tmpl, frame, far_side, k=1.0):
+def template_palette(tmpl, frame, far_side, k=1.0, gray=False):
     """Запасной путь: цвета верхней (надводной) части запомненного образца поплавка, которых нет
     в фоне текущего кадра. Не зависит от того, где кадр «думает», что проходит линия воды."""
     _, bg = A._background(frame, far_side)
-    return A._pick_colors(tmpl[:tmpl.shape[0] * 2 // 3].reshape(-1, 3), bg, k)
+    return A._pick_colors(tmpl[:tmpl.shape[0] * 2 // 3].reshape(-1, 3), bg, k, gray)
 
 def bobber_mask(img):
     """Силуэт поплавка: яркие насыщенные пиксели, не похожие на небо (верх) и воду (низ).
@@ -112,7 +115,7 @@ def patch_similarity(a, b):
     den = np.sqrt((a * a).sum() * (b * b).sum())
     return float((a * b).sum() / den) if den > 1e-6 else 0.0
 
-def bobber_palette(frame, box, far_side, k=1.0):
+def bobber_palette(frame, box, far_side, k=1.0, gray=False):
     """Цвета надводной части поплавка: насыщенные пиксели в рамке box (x, y, w, h) выше
     линии воды, которых нет в фоне. Фон — верхние строки (небо), нижние (вода) и
     3 столбца с края far_side (-1 левый, +1 правый) — со стороны, противоположной леске:
@@ -128,7 +131,7 @@ def bobber_palette(frame, box, far_side, k=1.0):
         # «Вода» нашлась выше поплавка — так не бывает (ночью небо и вода почти одного цвета).
         # Считаем, что линия воды проходит по середине поплавка.
         waterline = y + h // 2
-    return A._pick_colors(frame[y:min(y + h, waterline + 1), x:x + w].reshape(-1, 3), bg, k)
+    return A._pick_colors(frame[y:min(y + h, waterline + 1), x:x + w].reshape(-1, 3), bg, k, gray)
 
 def snap_bobber(frame, w, h, min_px, k=1.0):
     """Ищет в кадре место w x h с наибольшим числом ярких насыщенных пикселей, не похожих

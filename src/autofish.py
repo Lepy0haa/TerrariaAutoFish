@@ -562,6 +562,55 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             pass
 
     # ---------- автокалибровка ----------
+    def watch_palette(self, first, side):
+        """Цвета поплавка для слежения по первому снимку окошка: (BiteDetector, сколько пикселей
+        поплавка видно). Сначала — яркие цвета над водой, потом мягче (темно), потом по образцу,
+        и наконец — серые (у поплавков армированной удочки, «Ловца душ», «Сидящей утки» ярких
+        цветов нет). Цвета, которые есть и вдали от поплавка (переливы воды, блики), выкидываем:
+        с ними поплавок «виден» и утянутым — поклёвку не заметить."""
+        tw, th, rx, ry = self.tw, self.th, self.track_rx, self.track_ry
+        box = (rx, ry, tw, th)
+        k = light_factor(first)
+        tries = [(1.0, None, False)]
+        if k < 0.95:                                   # темно (ночь, пещера) — смягчаем пороги
+            tries.append((k, None, False))
+        for ref in (self.bobber, self.bobber0):        # запасной путь: цвета из образца поплавка
+            if ref is not None:
+                tries += [(1.0, ref, False), (k, ref, False)]
+        tries += [(1.0, None, True), (k, None, True)]
+        fallback = None
+        for kk, ref, gray in tries:
+            palette = (template_palette(ref, first, side, kk) if ref is not None
+                       else bobber_palette(first, box, side, kk, gray=gray))
+            if not len(palette):
+                continue
+            det = BiteDetector(palette, debug=self.debug)
+            base = det.visible(first)
+            if base < self.min_bobber_px:
+                continue
+            if fallback is None:
+                fallback = (det, base)
+            palette = self.own_colors(palette, first, box)
+            if len(palette):
+                det = BiteDetector(palette, debug=self.debug)
+                base = det.visible(first)
+                if base >= self.min_bobber_px:
+                    return det, base
+        return fallback or (BiteDetector(np.zeros((0, 3), np.float32), debug=self.debug), 0)
+
+    def own_colors(self, palette, first, box):
+        """Только цвета, которых (почти) нет вдали от поплавка: дальше его рамки с запасом (широкие
+        поплавки шире рамки). Несколько пикселей — леска, её не считаем."""
+        x, y, w, h = box
+        mx, my = max(4, int(5 * self.scale)), max(3, int(4 * self.scale))
+        away = np.ones(first.shape[:2], bool)
+        away[max(0, y - my):y + h + my, max(0, x - mx):x + w + mx] = False
+        px = first[away].reshape(-1, 1, 3)
+        if not len(px):
+            return palette
+        near = (np.abs(px - palette[None]).max(2) <= COLOR_TOL).sum(0)
+        return palette[near <= 3]
+
     def sink_ratio(self):
         """Текущий порог подсечки: подобранный автокалибровкой или заданный вручную."""
         if AUTO_CALIB and len(self.calm_floors) >= CALIB_MIN_CASTS:
@@ -937,21 +986,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             return
         first = grab(sct, watch)
         side = 1 if pos[0] >= player[0] else -1
-        palette = bobber_palette(first, (rx, ry, tw, th), side)
-        det = BiteDetector(palette, debug=self.debug)
-        base = det.visible(first) if len(palette) else 0
-        k = light_factor(first)
-        if base < self.min_bobber_px and k < 0.95:      # темно (ночь, пещера) — смягчаем пороги
-            palette = bobber_palette(first, (rx, ry, tw, th), side, k)
-            det = BiteDetector(palette, debug=self.debug)
-            base = det.visible(first) if len(palette) else 0
-        for ref in (self.bobber, self.bobber0):          # запасной путь: цвета из образца поплавка
-            for kk in (1.0, k):
-                if base >= self.min_bobber_px or ref is None:
-                    break
-                palette = template_palette(ref, first, side, kk)
-                det = BiteDetector(palette, debug=self.debug)
-                base = det.visible(first) if len(palette) else 0
+        det, base = self.watch_palette(first, side)
         det.ratio = self.sink_ratio()
         if len(det.palette):
             det.fit_top(first)                        # небо над поплавком не считаем (надпись сонара)

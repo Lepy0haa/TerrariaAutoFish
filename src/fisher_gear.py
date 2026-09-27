@@ -269,12 +269,15 @@ class GearMixin:
         # и кромка воды идут горизонтальными полосами, а поплавок занимает в строке мало места
         row_bg = np.median(frame, 1)[:, None, :]
         far = np.abs(frame - row_bg).max(2) > A.BG_DIST * k
-        vivid = (frame.max(2) - frame.min(2)) > A.SAT_MIN * k
-        m = far & vivid
         if changed is not None:
-            m &= changed
+            # среди нового после заброса — всё, что отличается от своей строки, и серое тоже: у
+            # поплавков армированной удочки, «Ловца душ», «Сидящей утки» ярких цветов почти нет
+            m = far & changed
+        else:
+            m = far & ((frame.max(2) - frame.min(2)) > A.SAT_MIN * k)
         # только «сплошные» места (все соседи 3x3 тоже яркие): у поплавка они есть, а у тонких
         # полос — светлой кромки воды, лески, контуров — нет, иначе они забирают всех кандидатов
+        raw = m
         core = m.copy()
         core[0, :] = core[-1, :] = core[:, 0] = core[:, -1] = False
         for dy in (-1, 0, 1):
@@ -291,6 +294,12 @@ class GearMixin:
         big = (jj[H:, W:] - jj[:-H, W:] - jj[H:, :-W] + jj[:-H, :-W]).astype(np.float64)
         if changed is None:
             sums[sums < 0.5 * big] = 0
+        else:
+            # тёмный поплавок ночью отличается от фона только контуром — «сплошных» мест у него нет.
+            # Среди нового после заброса считаем и контуры, но слабее (волны тоже бывают новыми)
+            r = raw.astype(np.int32)
+            kk = np.pad(r.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+            sums += 0.25 * (kk[th:, tw:] - kk[:-th, tw:] - kk[th:, :-tw] + kk[:-th, :-tw])
         out = []
         for _ in range(n):
             y, x = np.unravel_index(int(sums.argmax()), sums.shape)
@@ -330,12 +339,13 @@ class GearMixin:
 
     def _sprite_scores(self, frame, spots, only, near):
         k = max(self.sprite_scales()) / self.scale      # запас под самый крупный масштаб
-        pad_x, pad_y = int((self.tw + 8 * self.scale) * k), int((self.th + 8 * self.scale) * k)
+        # по бокам — места на две ширины поплавка: сравнить, не полоса ли это (кромка воды)
+        pad_x, pad_y = int((3 * self.tw + 8 * self.scale) * k), int((self.th + 8 * self.scale) * k)
         out = []
         for cx, cy in spots:
             x0, y0 = max(0, cx - pad_x), max(0, cy - pad_y)
             patch = frame[y0:cy + pad_y, x0:cx + pad_x]
-            r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only)
+            r = self.bobber_sprites.find(patch, self.sprite_scales(), only=only, lone=True)
             if not r:
                 continue
             v, x, y, w, h, key, s = r

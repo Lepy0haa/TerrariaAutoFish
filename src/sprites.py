@@ -88,6 +88,17 @@ def image_fft(img):
 
 
 PART_PENALTY = 0.05   # за каждую следующую (меньшую) долю спрайта — совпадение хуже на столько
+LONE_GAP = 0.2        # поплавок — отдельный предмет: в той же строке левее и правее (дальше своей ширины)
+                      # совпадение должно быть хуже хотя бы на столько. Иначе это полоса (кромка воды)
+
+
+def ridge_penalty(sc, x, y, w):
+    """Насколько место (x, y) карты совпадений sc — не отдельный предмет, а часть полосы: лучшее
+    совпадение в тех же строках (±2) не ближе ширины w слева и справа почти такое же, как в
+    самом месте. 0 — место отдельное (или сбоку не с чем сравнить)."""
+    rows = sc[max(0, y - 2):y + 3]
+    side = max(rows[:, :max(0, x - w + 1)].max(initial=-1.0), rows[:, x + w:].max(initial=-1.0))
+    return max(0.0, float(side) - (float(sc[y, x]) - LONE_GAP))
 
 
 class SpriteSet:
@@ -107,8 +118,10 @@ class SpriteSet:
     def title(self, key):
         return self.names.get(key, key)
 
-    def find(self, img, scales, only=None):
-        """Лучшее совпадение: (оценка, x, y, w, h, ключ, масштаб) или None."""
+    def find(self, img, scales, only=None, lone=False):
+        """Лучшее совпадение: (оценка, x, y, w, h, ключ, масштаб) или None.
+        lone — место должно быть отдельным предметом, а не частью полосы (см. ridge_penalty):
+        для поиска поплавка в широкой картинке, где есть кромка воды."""
         best = None
         fimg = image_fft(img)
         for sp in self.sprites:
@@ -121,6 +134,8 @@ class SpriteSet:
                     continue
                 y, x = np.unravel_index(int(sc.argmax()), sc.shape)
                 v = float(sc[y, x]) - sp.penalty
+                if lone:
+                    v -= ridge_penalty(sc, x, y, t.shape[1])
                 if best is None or v > best[0]:
                     best = (v, int(x), int(y), t.shape[1], t.shape[0], sp.name, s)
         return best
