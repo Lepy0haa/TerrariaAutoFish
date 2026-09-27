@@ -47,6 +47,7 @@ DEFAULTS = {
     "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
     "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
     "potion_remind": True, "events_stop": True, "death_stop": True,
+    "update_check": True,
     "overlay_alpha": 90, "overlay_font": "normal", "overlay_mode": True, "overlay_hide_paused": False,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
@@ -709,7 +710,8 @@ class App:
                           ("sound", tr("Звуки: старт, отметка, пауза")),
                           ("hook_sound", tr("Звук при подсечке")),
                           ("debug", tr("Сохранять отладочные картинки (папка data\\debug)")),
-                          ("record", tr("Режим записи: подсекаю я сам"))):
+                          ("record", tr("Режим записи: подсекаю я сам")),
+                          ("update_check", tr("Раз в сутки проверять, не вышла ли новая версия (GitHub)"))):
             var = tk.BooleanVar(value=bool(self.cfg[key]))
             ttk.Checkbutton(box, text=text, variable=var, command=lambda k=key: self.set_check(k)).grid(
                 row=row, column=0, columnspan=2, sticky="w")
@@ -1766,7 +1768,8 @@ class App:
     def check_updates(self, force=False):
         """Раз в сутки (или по кнопке) — нет ли на GitHub версии новее. Читает только публичные
         сведения о последнем релизе."""
-        if self.selftest or (not force and time.time() - float(self.cfg.get("update_checked") or 0) < 86400):
+        if self.selftest or (not force and (not self.cfg.get("update_check", True) or
+                                            time.time() - float(self.cfg.get("update_checked") or 0) < 86400)):
             return
 
         def work():
