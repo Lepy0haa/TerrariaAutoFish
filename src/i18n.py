@@ -589,6 +589,8 @@ EN = {
     "Раз в сутки проверять, не вышла ли новая версия (GitHub)": "Check for a new version once a day (GitHub)",
     "CloudTips — на чай картой": "CloudTips — tip by card",
     "Boosty — страница автора": "Boosty — author page",
+    "российские карты, без регистрации": "Russian bank cards only, no sign-up",
+    "в том числе из-за рубежа; нужно войти в Boosty": "works from abroad too; you need to sign in to Boosty",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

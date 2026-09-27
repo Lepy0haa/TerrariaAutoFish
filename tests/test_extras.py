@@ -129,9 +129,12 @@ class TestDownload(unittest.TestCase):
 class TestDonate(unittest.TestCase):
     def test_links(self):
         import donate
-        for name, url in donate.LINKS:
-            self.assertTrue(name.strip())
+        for name, url, note, lang in donate.LINKS:
+            self.assertTrue(name.strip() and note.strip())
             self.assertTrue(url.startswith("https://"), url)
+            self.assertIn(lang, ("ru", "en"))
+        self.assertIn("cloudtips", donate.ordered("ru")[0][1])      # по-русски — без регистрации
+        self.assertIn("boosty", donate.ordered("en")[0][1])         # по-английски — можно из-за рубежа
 
 
 class TestScreens(unittest.TestCase):

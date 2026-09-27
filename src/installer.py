@@ -15,7 +15,7 @@ from tkinter import filedialog, ttk
 import setup_core as sc
 from i18n import system_lang
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 LANG = system_lang()
 TEXT = {
     "title": ("Установка Terraria AutoFish %s", "Terraria AutoFish %s Setup"),

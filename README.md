@@ -340,6 +340,16 @@ bait numbers, and check that every message is translated to English.
 | `build.bat`, `.github/workflows/build.yml` | Building; automatic tests and builds on GitHub |
 | `TerrariaAutoFish.exe`, `_internal/`, `data/`, `dist/` | Not in the repository: the built program, what it writes (logs, pictures, snapshots), build results |
 
+## Support the project
+
+Terraria AutoFish is free. If it helped you, you can leave the author a tip — it's voluntary and
+changes nothing in the program:
+
+- **[Boosty](https://boosty.to/lepyoha/donate)** — the author's page, works from abroad too (you need to sign in to Boosty);
+- **[CloudTips](https://pay.cloudtips.ru/p/b2e68ed6)** — by card, no sign-up, Russian bank cards only.
+
+The same links are behind the **☕ Support** button on the Settings tab and in the tray menu.
+
 ## Important
 
 Use it in single player or on your own server. Macros are often prohibited on public servers and

@@ -27,7 +27,7 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
@@ -1102,8 +1102,9 @@ class App:
         ttk.Label(frame, text=tr("Программа бесплатная. Если она вам помогла, можно оставить автору «на чай» — "
                                  "это добровольно и ни на что в программе не влияет."),
                   style="Muted.TLabel", wraplength=340, justify="left").pack(anchor="w", pady=(6, 10))
-        for name, url in donate.LINKS:
-            ttk.Button(frame, text=tr(name), command=lambda u=url: webbrowser.open(u)).pack(fill="x", pady=2)
+        for name, url, note, _lang in donate.ordered(i18n.LANG):
+            ttk.Button(frame, text=tr(name), command=lambda u=url: webbrowser.open(u)).pack(fill="x", pady=(4, 0))
+            ttk.Label(frame, text=tr(note), style="Muted.TLabel").pack(anchor="w")
         ttk.Button(win, text=tr("Закрыть"), command=win.destroy).pack(anchor="e", padx=8, pady=(0, 8))
 
     def open_data(self):
