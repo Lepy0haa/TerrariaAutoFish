@@ -87,6 +87,10 @@ class ExtrasMixin:
         if self.dead_checks < 2:
             return False
         self.dead_checks, self.alive_hp = 0, 0
+        W, H = cl[2] - cl[0], cl[3] - cl[1]
+        self.n += 1
+        self.save_dbg("%03d_smert.png" % self.n, A.grab(sct, {"left": cl[0] + int(W * 0.55), "top": cl[1],
+                                                             "width": W - int(W * 0.55), "height": int(H * 0.25)}))
         during = self.event
         self.event, self.resume_at, self.resume_on_focus = None, None, False
         self.phase, self.watched = "idle", None
@@ -108,8 +112,18 @@ class ExtrasMixin:
         if not A.EVENTS_STOP or time.time() < self.chat_ignore_until or not self.ocr_ready():
             return None
         import chat
-        texts = chat.event_texts(A.grab(sct, chat.region(cl)), self.scale)
+        frame = A.grab(sct, chat.region(cl))
+        texts = chat.event_texts(frame, self.scale)
         found = chat.classify(texts) if texts else None
+        if texts and texts[0] != self.chat_seen:
+            # новая строка цвета событий — запомнить кадр чата и что прочитано (для проверки на
+            # настоящих кадрах); пока она висит в чате, второй раз не пишем
+            self.chat_seen = texts[0]
+            self.n += 1
+            self.save_dbg("%03d_chat.png" % self.n, frame)
+            if self.debug or found is None:
+                self.log(tr("Чат: «%s» — %s.") % (texts[0], tr("событие «%s»") % tr(chat.EVENTS[found[1]][0])
+                                                   if found else tr("не событие")))
         if found is None:
             return None
         self.chat_ignore_until = time.time() + 30       # сообщение ещё повисит в чате — второй раз не считаем

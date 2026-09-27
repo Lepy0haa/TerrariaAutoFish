@@ -446,6 +446,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.hp_last = 0.0
         self.chat_last = 0.0               # когда смотрели в чат
         self.chat_ignore_until = 0.0       # это сообщение уже учли
+        self.chat_seen = None              # последняя замеченная строка событий (записываем один раз)
         self.resume_at = None              # когда продолжить самим (пережидаем событие)
         self.event = None                  # какое событие пережидаем (ключ chat.EVENTS)
         self.alive_hp, self.dead_checks = 0, 0   # сердечки живого персонажа / проверок «погиб» подряд
