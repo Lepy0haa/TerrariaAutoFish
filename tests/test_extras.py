@@ -187,6 +187,19 @@ class TestHistory(unittest.TestCase):
         self.assertEqual(h2.totals("all", now)["items"], {2315: 3, 2312: 1})
         self.assertEqual(h2.totals("all", now)["days"], 3)
 
+    def test_by_day_and_hour(self):
+        import datetime
+        import history
+        h = history.History(None)
+        h.add_catch(2315, "2026-09-26", hour=21)
+        h.add_catch(None, "2026-09-26", hour=21)
+        h.add_catch(2312, "2026-09-25", hour=3)
+        days = h.by_day(3, datetime.date(2026, 9, 26))
+        self.assertEqual([n for _, n in days], [0, 1, 2])
+        hours = h.by_hour("all", datetime.date(2026, 9, 26))
+        self.assertEqual((hours[21], hours[3], sum(hours)), (2, 1, 3))
+        self.assertEqual(sum(h.by_hour("today", datetime.date(2026, 9, 26))), 2)
+
 
 class TestReportAndWizard(unittest.TestCase):
     def test_catch_rows(self):
@@ -241,6 +254,37 @@ class TestReportAndWizard(unittest.TestCase):
         self.assertIn("29 мин", text)                         # 294 · 6 с ≈ 29 мин
         f.bait_count = None
         self.assertEqual(app.App.bait_text(f), "100+")
+
+    def test_charts(self):
+        import app
+        import history
+
+        class Canvas:
+            def __init__(self):
+                self.rects, self.texts = [], []
+
+            def delete(self, *a):
+                pass
+
+            def winfo_width(self):
+                return 470
+
+            def create_rectangle(self, x0, y0, x1, y1, **kw):
+                self.rects.append((x0, y0, x1, y1))
+
+            def create_text(self, x, y, **kw):
+                self.texts.append((x, y, kw.get("text")))
+
+        class Fake:
+            pass
+        f = Fake()
+        f.history = history.History(None)
+        f.history.add_catch(2315, hour=21)
+        cv = Canvas()
+        app.App.draw_charts(f, cv, "all")
+        self.assertEqual(len(cv.rects), 14 + 24)
+        for x0, y0, x1, y1 in cv.rects:
+            self.assertTrue(0 <= x0 <= x1 <= 470 and 0 <= y0 <= y1 <= 150, (x0, y0, x1, y1))
 
     def test_wizard_pages(self):
         pages = wizard.pages("HOME", "END")

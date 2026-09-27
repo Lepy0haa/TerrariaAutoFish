@@ -35,13 +35,43 @@ class History:
         self.day(day)["skipped"] += 1
         self.save()
 
-    def add_catch(self, item_id, day=None):
+    def add_catch(self, item_id, day=None, hour=None):
         d = self.day(day)
         if item_id is None:
             d["unknown"] += 1
         else:
             d["items"][str(item_id)] = d["items"].get(str(item_id), 0) + 1
+        h = str(datetime.datetime.now().hour if hour is None else hour)
+        hours = d.setdefault("hours", {})
+        hours[h] = hours.get(h, 0) + 1
         self.save()
+
+    def by_day(self, n=14, now=None):
+        """[(дата, сколько поймано)] за последние n дней, по порядку (дни без рыбалки — 0)."""
+        now = now or datetime.date.today()
+        out = []
+        for k in range(n - 1, -1, -1):
+            day = now - datetime.timedelta(days=k)
+            d = self.days.get(day.isoformat(), {})
+            out.append((day, sum(int(v) for v in d.get("items", {}).values()) + int(d.get("unknown", 0))))
+        return out
+
+    def by_hour(self, period, now=None):
+        """Сколько поймано в каждый час суток (0..23) за период ("today", "week", "all")."""
+        now = now or datetime.date.today()
+        first = {"today": now, "week": now - datetime.timedelta(days=6)}.get(period)
+        out = [0] * 24
+        for key, d in self.days.items():
+            try:
+                date = datetime.date.fromisoformat(key)
+            except ValueError:
+                continue
+            if first is not None and not first <= date <= now:
+                continue
+            for h, n in d.get("hours", {}).items():
+                if 0 <= int(h) < 24:
+                    out[int(h)] += int(n)
+        return out
 
     def totals(self, period, now=None):
         """Сумма за период ("today", "week" — последние 7 дней, "all"): {"hooks", "unknown",

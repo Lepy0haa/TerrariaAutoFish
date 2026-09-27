@@ -944,6 +944,8 @@ class App:
         tree.pack(fill="both", expand=True)
         summary = ttk.Label(frame, style="Muted.TLabel", wraplength=470, justify="left")
         summary.pack(anchor="w", pady=(8, 0))
+        charts = tk.Canvas(frame, width=470, height=150, bg=C["panel"], highlightthickness=0)
+        charts.pack(fill="x", pady=(8, 0))
         bar = tk.Frame(win, bg=C["bg"])
         bar.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(bar, text=tr("Закрыть"), command=win.destroy).pack(side="right")
@@ -958,8 +960,9 @@ class App:
                 tree.insert("", "end", values=row)
             if not rows:
                 tree.insert("", "end", values=(tr("пока ничего не узнано"), "", ""))
-            summary.config(text=self.catch_summary(self.report_period) + "\n" + tr(
-                "Улов узнаётся по надписи о подборе над персонажем после каждой подсечки."))
+            summary.config(text=self.catch_summary(self.report_period) + "\n" + self.catch_highlights(
+                self.report_period) + "\n" + tr("Улов узнаётся по надписи о подборе над персонажем после каждой подсечки."))
+            self.draw_charts(charts, self.report_period)
             win.after(2000, refresh)
 
         def set_period(_e=None):
@@ -967,6 +970,51 @@ class App:
         pcb.bind("<<ComboboxSelected>>", set_period)
         refresh()
         self.catch_win = win
+
+    def catch_highlights(self, period):
+        """Сколько ящиков и редкого, лучший биом — за период."""
+        c, ru = self.catch_data, i18n.LANG == "ru"
+        if c is None:
+            return ""
+        items = self.catch_totals(period)["items"]
+        crates = sum(n for i, n in items.items() if "crates" in c.where.get(i, []))
+        rare = sum(n for i, n in items.items() if "rare" in c.where.get(i, []))
+        biomes = {}
+        for i, n in items.items():
+            homes = [k for k in c.where.get(i, []) if k not in ("crates", "rare", "junk")]
+            for k in homes:
+                biomes[k] = biomes.get(k, 0) + n / float(len(homes))
+        text = tr("Ящиков: %d · редкого: %d") % (crates, rare)
+        if biomes:
+            best = max(biomes, key=biomes.get)
+            g = c.group[best]
+            text += tr(" · больше всего из биома: %s") % (g["ru"] if ru else g["en"])
+        return text
+
+    def draw_charts(self, cv, period):
+        """Два столбчатых графика: улов по дням (14 дней) и по часам суток (за период)."""
+        cv.delete("all")
+        w, h = int(cv.winfo_width()) if cv.winfo_width() > 10 else 470, 150
+        half = w // 2 - 8
+        days = self.history.by_day(14)
+        hours = self.history.by_hour("today" if period == "session" else period)
+
+        def chart(x0, title, values, labels, every):
+            cv.create_text(x0, 8, text=title, anchor="w", fill=C["muted"], font=(FONT, 8))
+            top, bottom = 22, h - 16
+            peak = max(values) or 1
+            bw = half / float(len(values))
+            for k, v in enumerate(values):
+                bx = x0 + k * bw
+                by = bottom - (bottom - top) * v / float(peak)
+                cv.create_rectangle(bx + 1, by, bx + bw - 1, bottom, fill=C["green"] if v else C["line"], width=0)
+                if k % every == 0:
+                    cv.create_text(bx + bw / 2, h - 7, text=labels[k], fill=C["muted"], font=(FONT, 7))
+            cv.create_text(x0 + half, 8, text=tr("макс. %d") % max(values), anchor="e", fill=C["muted"],
+                           font=(FONT, 7))
+
+        chart(0, tr("Улов по дням (14 дней)"), [n for _, n in days], [d.strftime("%d") for d, _ in days], 2)
+        chart(w // 2 + 8, tr("По часам суток"), hours, [str(k) for k in range(24)], 3)
 
     def report_mistake(self):
         """«Что-то не так»: последние картинки, снимок игры, конец журнала — одним архивом в data."""
