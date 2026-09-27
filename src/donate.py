@@ -10,4 +10,6 @@
     ]
 """
 
-LINKS = []
+LINKS = [
+    ("CloudTips — на чай картой", "https://pay.cloudtips.ru/p/b2e68ed6"),
+]
