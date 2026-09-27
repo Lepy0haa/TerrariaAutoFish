@@ -231,9 +231,9 @@ class TestSonarFlow(unittest.TestCase):
             time.sleep(1.2)
             casts = self.game.clicks.count("заброс")
             self.bite(r, "Старый ботинок", (170, 170, 170))       # мусор — не подсекаем
-            time.sleep(0.5)
+            # чтение надписи на медленной машине (сборка на GitHub) может занять дольше полсекунды
+            self.assertTrue(r.wait_for(lambda: r.fisher.skipped == 1, 5), r.logs[-4:])
             self.assertEqual(r.fisher.hooks, 0, r.logs[-4:])
-            self.assertEqual(r.fisher.skipped, 1, r.logs[-4:])
             self.assertEqual(self.game.clicks.count("вытащил"), 0)
             time.sleep(1.2)
             self.bite(r, "Окунь", (255, 255, 255))                 # окунь — подсекаем
