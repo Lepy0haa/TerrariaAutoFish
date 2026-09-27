@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import threading
+import webbrowser
 import time
 import winsound
 import zlib
@@ -707,6 +708,9 @@ class App:
         self.update_btn = ttk.Button(bf, text=tr("Обновления"), command=self.on_update_btn)
         self.update_btn.pack(side="right", padx=(0, 6))
         self.show_update_btn()
+        import donate
+        if donate.LINKS:                          # ссылки на пожертвования есть — есть и кнопка
+            ttk.Button(bf, text=tr("☕ Поддержать"), command=self.show_donate).pack(side="right", padx=(0, 6))
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -940,6 +944,25 @@ class App:
         pcb.bind("<<ComboboxSelected>>", set_period)
         refresh()
         self.catch_win = win
+
+    def show_donate(self):
+        """Поддержать автора: короткое спасибо и кнопки страниц пожертвований (открываются в браузере)."""
+        import donate
+        win = tk.Toplevel(self.root)
+        win.title(tr("Поддержать автора"))
+        win.configure(bg=C["bg"])
+        win.transient(self.root)
+        win.resizable(False, False)
+        frame = tk.Frame(win, bg=C["panel"], padx=16, pady=14)
+        frame.pack(fill="both", expand=True, padx=8, pady=8)
+        ttk.Label(frame, text=tr("Спасибо, что пользуетесь Terraria AutoFish!"), style="Card.TLabel",
+                  font=(FONT, 11, "bold")).pack(anchor="w")
+        ttk.Label(frame, text=tr("Программа бесплатная. Если она вам помогла, можно оставить автору «на чай» — "
+                                 "это добровольно и ни на что в программе не влияет."),
+                  style="Muted.TLabel", wraplength=340, justify="left").pack(anchor="w", pady=(6, 10))
+        for name, url in donate.LINKS:
+            ttk.Button(frame, text=name, command=lambda u=url: webbrowser.open(u)).pack(fill="x", pady=2)
+        ttk.Button(win, text=tr("Закрыть"), command=win.destroy).pack(anchor="e", padx=8, pady=(0, 8))
 
     def open_data(self):
         """Папка data: журналы, отладочные картинки, снимки хотбара, отчёты."""
@@ -1745,8 +1768,11 @@ class App:
             if not os.path.exists(ico):
                 os.makedirs(CFG_DIR, exist_ok=True)
                 write_ico(ico, sizes=(16, 32, 48))
-            menu = [("show", tr("Показать окно")), ("toggle", tr("Пауза / продолжить")), ("help", tr("Как начать")),
-                    None, ("quit", tr("Выход"))]
+            import donate
+            menu = [("show", tr("Показать окно")), ("toggle", tr("Пауза / продолжить")), ("help", tr("Как начать"))]
+            if donate.LINKS:
+                menu.append(("donate", tr("☕ Поддержать автора")))
+            menu += [None, ("quit", tr("Выход"))]
             self.tray = tray.Tray(APP, ico, menu, lambda c: self.q.put(("tray", {"cmd": c})))
             if not self.tray.start():
                 self.tray = None
@@ -1769,6 +1795,8 @@ class App:
                 self.root.focus_force()
         elif cmd == "toggle":
             self.fisher.on_toggle()
+        elif cmd == "donate":
+            self.show_donate()
         elif cmd == "help":
             self.root.deiconify()
             self.show_wizard()

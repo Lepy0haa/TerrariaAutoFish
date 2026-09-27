@@ -533,6 +533,11 @@ EN = {
     "Босс": "Boss",
     "%d раза подряд без поклёвки — вернулся к исходному образцу и отметке поплавка.":
         "%d times in a row without a bite — went back to the original bobber image and mark.",
+    "☕ Поддержать": "☕ Support",
+    "☕ Поддержать автора": "☕ Support the author",
+    "Поддержать автора": "Support the author",
+    "Спасибо, что пользуетесь Terraria AutoFish!": "Thank you for using Terraria AutoFish!",
+    "Программа бесплатная. Если она вам помогла, можно оставить автору «на чай» — это добровольно и ни на что в программе не влияет.": "The program is free. If it helped you, you can leave the author a tip — it's voluntary and changes nothing in the program.",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

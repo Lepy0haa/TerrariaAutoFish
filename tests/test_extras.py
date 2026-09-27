@@ -126,6 +126,14 @@ class TestDownload(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(out, "bad-setup.exe")))
 
 
+class TestDonate(unittest.TestCase):
+    def test_links(self):
+        import donate
+        for name, url in donate.LINKS:
+            self.assertTrue(name.strip())
+            self.assertTrue(url.startswith("https://"), url)
+
+
 class TestHistory(unittest.TestCase):
     def test_days_and_periods(self):
         import datetime
