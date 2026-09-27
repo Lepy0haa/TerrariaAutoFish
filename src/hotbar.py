@@ -345,6 +345,26 @@ class RodFinder(ItemFinder):
             out.append((sc[key], key, True))
         return r[0], out
 
+    def slot_has_count(self, frame, j):
+        """Написано ли число на предмете в слоте j (у удочки — наживка; у топора, меча — нет)."""
+        r = self.cells(frame)
+        return r is not None and bool(r[1][j][2])
+
+    def held(self, frame, min_score=0.45):
+        """В руках (в выбранном слоте) удочка? Число наживки на иконке и форма удочки, не зелье."""
+        r = self.cells(frame)
+        if r is None:
+            return False
+        index, cells = r
+        cell, size, count, use = cells[index]
+        if not use:
+            return False
+        sc = self.cell_scores(cell, size)
+        key = max(sc, key=sc.get)
+        if self.others is not None and max(self.others.cell_scores(cell, size).values()) > sc[key]:
+            return False
+        return sc[key] >= min_score
+
     def find(self, frame, min_score=0.45, margin=0.1):
         """Слот с удочкой: (номер слота 0..9, какая удочка, оценка, номер выбранного слота) или None.
         Удочка — слот с числом, больше всех похожий на удочку, с запасом над остальными."""

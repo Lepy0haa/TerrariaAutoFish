@@ -162,7 +162,22 @@ class GearMixin:
             self.hotbar_u = sel[1]
         elif abs(sel[1] - self.hotbar_u) > 0.1:
             return False                     # хотбар другого размера — это не он: ничего не жмём
+        if A.ROD_SLOT is None and self.rods is not None and self.rods.held(frame, A.ROD_HINT_MIN):
+            # в руках уже удочка (может быть, другая — игрок сменил её сам): ей и ловим, слот
+            # запомнится после удачного заброса. Переключаемся, только если в руках не удочка
+            if self.rod_slot is not None and self.rod_slot != sel[0]:
+                self.log(tr("В руках удочка из слота %d — ловлю ей.") % ((sel[0] + 1) % 10))
+            self.cast_slot = sel[0]
+            self.check_bait(frame, sel)
+            return False
         target = self.rod_target()
+        if (target is not None and A.ROD_SLOT is None and self.rods is not None
+                and not self.rods.slot_has_count(frame, target)):
+            # в запомненном слоте теперь не удочка (нет числа наживки — топор, меч…): забываем
+            self.log(tr("В слоте %d теперь не удочка — ищу удочку в хотбаре.") % ((target + 1) % 10))
+            self.rod_slot = target = None
+            self.save_gear()
+            self.gear_changed()
         if target is None:
             target = self.rod_hint(frame, sel[0])
             if target is None:

@@ -592,6 +592,8 @@ EN = {
     "российские карты, без регистрации": "Russian bank cards only, no sign-up",
     "в том числе из-за рубежа; нужно войти в Boosty": "works from abroad too; you need to sign in to Boosty",
     'Программа поймала для вас уже %d рыб и предметов! Если она помогает — поддержите автора: кнопка «☕ Поддержать автора» вверху.': 'The program has already caught %d fish and items for you! If it helps, support the author: the ☕ Support the author button at the top.',
+    "В руках удочка из слота %d — ловлю ей.": "Holding the fishing rod from slot %d — fishing with it.",
+    "В слоте %d теперь не удочка — ищу удочку в хотбаре.": "Slot %d no longer holds a fishing rod — looking for the rod in the hotbar.",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

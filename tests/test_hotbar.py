@@ -156,6 +156,47 @@ class TestHotbar(unittest.TestCase):
         x0, y0, x1, y1, rel = hotbar.slot_boxes(*sel)[0]
         self.assertIsNone(reader.read(img[max(0, y0):y1, max(0, x0):x1].astype(np.float64), rel * sel[1]))
 
+    def test_rod_in_hand_is_kept_in_auto_mode(self):
+        # из игры: две удочки в хотбаре, в режиме «Авто» программа всё время переключалась на
+        # запомненный слот 5, хотя игрок взял удочку из другого слота
+        game = helpers.FakeGame(selected="5")                   # в руках удочка (слот 5)
+        restore = game.install()
+        try:
+            f = af.Fisher()
+            f.hotbar_frame = lambda sct, cl: game.screen()[:200, :game.W]
+            f.rod_slot = 2                                      # запомнен другой слот (3)
+            self.assertFalse(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(game.keys, [])                     # ничего не нажимал
+            self.assertEqual(f.cast_slot, ROD)
+            f.learn_rod()
+            self.assertEqual(f.rod_slot, ROD)                   # запомнил новый слот
+            # в руках не удочка (кнут) — берём запомненную
+            game.selected = "1"
+            self.assertTrue(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(game.keys, ["5"])
+        finally:
+            restore()
+
+    def test_remembered_slot_without_rod_is_forgotten(self):
+        # из игры: запомнен слот, где теперь топор, — раньше программа жала его перед каждым
+        # забросом; теперь видит, что числа наживки там нет, и находит удочку сама
+        game = helpers.FakeGame(selected="1")                   # в руках кнут
+        restore = game.install()
+        try:
+            f = af.Fisher()
+            f.hotbar_frame = lambda sct, cl: game.screen()[:200, :game.W]
+            f.rod_slot = 1                                      # запомнен слот 2 — там не удочка
+            self.assertTrue(f.ensure_rod(None, (0, 0, game.W, game.H)))
+            self.assertEqual(game.keys, ["5"])                  # взял настоящую удочку
+            self.assertIsNone(f.rod_slot)                       # старый слот забыт
+        finally:
+            restore()
+
+    def test_held_rod_recognized(self):
+        f = af.Fisher()
+        for key in "1234567890":
+            self.assertEqual(f.rods.held(helpers.hotbar(key), af.ROD_HINT_MIN), key == "5", key)
+
     def test_rod_already_in_hand(self):
         game = helpers.FakeGame(selected="5")
         restore = game.install()

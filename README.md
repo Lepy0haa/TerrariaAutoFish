@@ -310,7 +310,7 @@ taken from `docs/releases/<tag>.md`).
 
 ### Tests
 
-`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 118 tests in about four and a half minutes, most of them on
+`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 121 tests in about four and a half minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
 taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
