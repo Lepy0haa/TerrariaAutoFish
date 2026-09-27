@@ -608,6 +608,8 @@ class App:
         self.pause_btn = ttk.Button(btns, text=tr("⏸ Пауза"), command=self.pause)
         self.pause_btn.pack(side="left", padx=6)
         ttk.Button(btns, text=tr("↺ Новые точки"), command=self.new_points).pack(side="left")
+        # что-то пошло не так — сохранить всё для разбора одним архивом
+        ttk.Button(btns, text=tr("⚑ Что-то не так"), command=self.report_mistake).pack(side="left", padx=6)
         ttk.Button(btns, text=tr("Папка"), command=self.open_data).pack(side="right")
 
         # журнал
@@ -960,6 +962,28 @@ class App:
         pcb.bind("<<ComboboxSelected>>", set_period)
         refresh()
         self.catch_win = win
+
+    def report_mistake(self):
+        """«Что-то не так»: последние картинки, снимок игры, конец журнала — одним архивом в data."""
+        lines = self.log_txt.get("1.0", "end").strip().split("\n")[-300:]
+        extra = {"settings.json": json.dumps(self.cfg, ensure_ascii=False, indent=2),
+                 "system.txt": self.system_info()}
+
+        def work():
+            import mss
+            try:
+                with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                    path = self.fisher.save_mistake(sct, os.path.join(af.DATA_DIR, "reports"), lines, extra)
+            except Exception as e:
+                self.q.put(("log", {"text": tr("Не удалось сохранить: %r") % e, "kind": "bad"}))
+                return
+            self.q.put(("log", {"text": tr("Сохранил для разбора: %s — пришлите этот файл автору.") % path,
+                                "kind": "good"}))
+            try:
+                subprocess.Popen(["explorer", "/select,", path])
+            except Exception:
+                pass
+        threading.Thread(target=work, daemon=True).start()
 
     def run_diagnostics(self):
         """Диагностика через 3 с (чтобы переключиться в игру): результат — в окне и в data."""

@@ -111,6 +111,7 @@ ZOOMS = (1.0, 1.25, 1.5, 1.75, 2.0)   # какие бывают (игра не �
 EVENTS_STOP = True        # событие в чате (луны, затмение, вторжения, боссы) — вытащить поплавок и переждать
 DEATH_STOP = True         # персонаж погиб — остановить рыбалку совсем (без самопродолжения)
 CHAT_EVERY = 2.0          # как часто смотреть в чат, секунд
+RECENT_PICTURES = 60  # сколько последних картинок помнить для кнопки «Что-то не так»
 NO_BITE_RESET = 3     # столько перезабросов подряд без поклёвки — вернуться к исходному образцу поплавка
 FOLLOW_SHIFT = True   # вся картинка сдвинулась (персонажа сдвинуло) — перенести точки на столько же
 SHIFT_MIN = 3         #   ...если сдвиг хотя бы столько пикселей
@@ -431,6 +432,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
         self.scene = None                  # снимок места рыбалки (см. follow_shift)
         self.no_bite = 0                   # перезабросов подряд без поклёвки
+        self.recent_dbg = deque(maxlen=RECENT_PICTURES)   # последние картинки поиска и поклёвок
         self.zoom_probe = False            # идёт первый автопоиск — пробуем все масштабы
         self.shifts = 0                    # сколько раз переносили точки за сдвигом картинки
         self.rod_miss_time = 0.0            # когда не получилось взять удочку клавишей
@@ -723,8 +725,47 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.pause(tr("не получается %d раз подряд. Нет наживки?") % MAX_FAILS)
 
     def save_dbg(self, name, img, **kw):
+        # последние картинки помним всегда — для кнопки «Что-то не так» (даже без отладки)
+        self.recent_dbg.append((name, np.array(img, np.float32, copy=True), kw))
         if self.debug or self.record:
             save_png(img, os.path.join(RECORD_DIR if self.record else DEBUG_DIR, name), **kw)
+
+    def save_mistake(self, sct, folder, log_lines, extra=None):
+        """«Что-то не так»: в один архив — последние картинки поиска и поклёвок, снимок окна игры
+        сейчас, конец журнала и настройки движка. Путь к архиву."""
+        import io as _io
+        import zipfile
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, time.strftime("mistake_%Y%m%d_%H%M%S.zip"))
+        tmp = os.path.join(folder, "_mistake_tmp.png")
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, img, kw in list(self.recent_dbg):
+                save_png(img, tmp, **kw)
+                z.write(tmp, "pictures/" + name)
+            hwnd = find_terraria()
+            if hwnd and sct is not None:
+                cl = client_rect(hwnd)
+                shot = grab(sct, {"left": cl[0], "top": cl[1], "width": cl[2] - cl[0], "height": cl[3] - cl[1]})
+                save_png(shot, tmp)
+                z.write(tmp, "game.png")
+            z.writestr("log.txt", "\n".join(log_lines))
+            state = {"cast_point": self.cast_point, "mark": self.mark, "mark0": self.mark0, "phase": self.phase,
+                     "bobber_kind": self.bobber_kind, "scale": self.scale, "hooks": self.hooks,
+                     "fails": self.fails, "event": self.event}
+            z.writestr("state.txt", "\n".join("%s=%s" % kv for kv in state.items()))
+            if self.bobber is not None:
+                save_png(self.bobber, tmp, scale=6)
+                z.write(tmp, "bobber_now.png")
+            if self.bobber0 is not None:
+                save_png(self.bobber0, tmp, scale=6)
+                z.write(tmp, "bobber_start.png")
+            for name, data in (extra or {}).items():
+                z.writestr(name, data)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return path
 
 
     # ---------- основной цикл ----------

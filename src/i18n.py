@@ -566,6 +566,9 @@ EN = {
     'Zoom в настройках программы: %d%% (узнаётся сам при первом автопоиске поплавка).': "Zoom in the program's settings: %d%% (recognized by itself on the first automatic bobber search).",
     'Точки рыбалки сохранены — HOME продолжит с ними.': 'Fishing points are saved — HOME continues with them.',
     'Точек пока нет: курсор на воду и HOME.': 'No points yet: cursor on the water and HOME.',
+    '⚑ Что-то не так': "⚑ Something's wrong",
+    'Не удалось сохранить: %r': "Couldn't save: %r",
+    'Сохранил для разбора: %s — пришлите этот файл автору.': 'Saved for analysis: %s — send this file to the author.',
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

@@ -141,6 +141,32 @@ class TestScreens(unittest.TestCase):
         self.assertFalse(app.on_screen(-50000, -50000))        # монитора там нет (отключили)
 
 
+class TestMistake(unittest.TestCase):
+    def test_archive(self):
+        import tempfile
+        import zipfile
+        saved = {n: getattr(af, n) for n in ("REEL_DELAY", "HEALTH_GUARD", "BUFFS_ON")}
+        af.REEL_DELAY, af.HEALTH_GUARD, af.BUFFS_ON = 0.3, False, False
+        game = FakeGame(selected="5")
+        restore = game.install()
+        r = Run(game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            self.assertFalse(r.fisher.debug)                      # отладка выключена, а картинки помним
+            path = r.fisher.save_mistake(af.mss.MSS(), tempfile.mkdtemp(), ["строка журнала"],
+                                         {"settings.json": "{}"})
+            names = zipfile.ZipFile(path).namelist()
+            self.assertTrue(any(n.startswith("pictures/") for n in names), names)
+            for n in ("game.png", "log.txt", "state.txt", "bobber_now.png", "settings.json"):
+                self.assertIn(n, names)
+        finally:
+            r.stop()
+            restore()
+            for n, v in saved.items():
+                setattr(af, n, v)
+
+
 class TestHistory(unittest.TestCase):
     def test_days_and_periods(self):
         import datetime
