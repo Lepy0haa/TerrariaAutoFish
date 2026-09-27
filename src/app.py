@@ -714,6 +714,8 @@ class App:
         bf.grid(row=row, column=0, columnspan=2, sticky="we", pady=(6, 0))
         ttk.Button(bf, text=tr("Проверить уведомление"), command=lambda: toast(
             APP, tr("Так выглядят уведомления программы"))).pack(side="left")
+        # всё, что нужно для рыбалки, — одной проверкой, с подсказками, что исправить
+        ttk.Button(bf, text=tr("Диагностика"), command=self.run_diagnostics).pack(side="left", padx=(6, 0))
         # всё для разбора проблемы — одним архивом: журнал, настройки, отладочные картинки
         ttk.Button(bf, text=tr("Собрать отчёт"), command=self.make_report).pack(side="right")
         self.update_btn = ttk.Button(bf, text=tr("Обновления"), command=self.on_update_btn)
@@ -721,7 +723,10 @@ class App:
         self.show_update_btn()
         import donate
         if donate.LINKS:                          # ссылки на пожертвования есть — есть и кнопка
-            ttk.Button(bf, text=tr("☕ Поддержать"), command=self.show_donate).pack(side="right", padx=(0, 6))
+            row += 1
+            bf2 = ttk.Frame(box, style="Card.TFrame")
+            bf2.grid(row=row, column=0, columnspan=2, sticky="we", pady=(6, 0))
+            ttk.Button(bf2, text=tr("☕ Поддержать"), command=self.show_donate).pack(side="right")
         row += 1
         box.columnconfigure(0, weight=1)
 
@@ -955,6 +960,53 @@ class App:
         pcb.bind("<<ComboboxSelected>>", set_period)
         refresh()
         self.catch_win = win
+
+    def run_diagnostics(self):
+        """Диагностика через 3 с (чтобы переключиться в игру): результат — в окне и в data."""
+        self.add_log(tr("Диагностика: переключитесь в игру — проверка через 3 с…"), "ask")
+
+        def work():
+            import mss
+            import diagnose
+            time.sleep(3)
+            hwnd = af.find_terraria()
+            active = bool(af.terraria_window())
+            try:
+                with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                    results = diagnose.run(self.fisher, sct, hwnd, active)
+            except Exception as e:
+                results = [(diagnose.BAD, tr("Ошибка диагностики: %r") % e)]
+            try:
+                path = diagnose.save(results, af.DATA_DIR)
+            except Exception:
+                path = None
+            self.q.put(("diagnostics", {"results": results, "path": path}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def show_diagnostics(self, d):
+        import diagnose
+        results = d["results"]
+        bad = sum(1 for s, _ in results if s != diagnose.OK)
+        self.add_log(tr("Диагностика: всё в порядке.") if not bad else
+                     tr("Диагностика: есть что исправить (%d).") % bad, "good" if not bad else "bad")
+        win = tk.Toplevel(self.root)
+        win.title(tr("Диагностика"))
+        win.configure(bg=C["bg"])
+        win.transient(self.root)
+        frame = tk.Frame(win, bg=C["panel"], padx=14, pady=12)
+        frame.pack(fill="both", expand=True, padx=8, pady=8)
+        colors = {diagnose.OK: C["green"], diagnose.WARN: C["yellow"], diagnose.BAD: C["red"]}
+        for state, text in results:
+            row = tk.Frame(frame, bg=C["panel"])
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=diagnose.MARK[state], bg=C["panel"], fg=colors.get(state, C["text"]),
+                     font=(FONT, 10, "bold"), width=2).pack(side="left", anchor="n")
+            tk.Label(row, text=text, bg=C["panel"], fg=C["text"], font=(FONT, 9), wraplength=420,
+                     justify="left", anchor="w").pack(side="left", fill="x")
+        if d.get("path"):
+            ttk.Label(frame, text=tr("Сохранено: %s") % d["path"], style="Muted.TLabel", wraplength=440,
+                      justify="left").pack(anchor="w", pady=(8, 0))
+        ttk.Button(win, text=tr("Закрыть"), command=win.destroy).pack(anchor="e", padx=8, pady=(0, 8))
 
     def show_donate(self):
         """Поддержать автора: короткое спасибо и кнопки страниц пожертвований (открываются в браузере)."""
@@ -1475,6 +1527,8 @@ class App:
             self.on_tray(d["cmd"])
         elif kind == "update":
             self.on_update(d)
+        elif kind == "diagnostics":
+            self.show_diagnostics(d)
         elif kind == "update_progress":
             self.update_btn.config(text=tr("Скачиваю… %d%%") % round(100 * d["p"]))
         elif kind == "update_ready":
@@ -1723,6 +1777,8 @@ class App:
                 for f in newest(LOG_DIR, 3, (".log",)):
                     z.write(f, "logs/" + os.path.basename(f))
                 z.writestr("settings/settings.json", json.dumps(self.cfg, ensure_ascii=False, indent=2))
+                for f in newest(af.DATA_DIR, 3, exts=(".txt",)):
+                    z.write(f, "diagnostics/" + os.path.basename(f))
                 for name in ("gear.json", "catch_history.json"):
                     f = os.path.join(CFG_DIR, name)
                     if os.path.exists(f):
