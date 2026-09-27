@@ -1791,7 +1791,7 @@ class App:
             if d["force"]:
                 self.add_log(tr("У вас последняя версия (%s).") % VERSION, "good")
             return
-        version, url, setup = found
+        version, url, files = found
         self.update_url = url
         self.update_info = found
         self.show_update_btn()
@@ -1814,20 +1814,24 @@ class App:
             self.check_updates(force=True)
 
     def install_update(self):
-        """Обновление в один клик: скачать установщик новой версии, запустить его и закрыться (иначе
-        он не сможет заменить файлы программы). Портативной версии установщик не нужен — откроем
-        страницу релиза."""
+        """Обновление в один клик: скачать новую версию и закрыться, чтобы её файлы можно было заменить.
+        Установленная — запускается установщик; портативная — архив распаковывается, и после закрытия
+        программы её файлы заменяются новыми, а программа запускается снова."""
         from tkinter import messagebox
-        version, url, setup = self.update_info
-        if PORTABLE or setup is None or getattr(self, "updating", False):
+        version, url, files = self.update_info
+        portable = PORTABLE and getattr(sys, "frozen", False)
+        asset = (files or {}).get("portable" if portable else "setup")
+        if asset is None or getattr(self, "updating", False) or not getattr(sys, "frozen", False):
             try:
                 os.startfile(url)
             except Exception:
                 pass
             return
-        if not messagebox.askyesno(APP, tr("Скачать и установить версию %s?\n\nПрограмма закроется, а "
-                                           "установщик обновит её (настройки и точки сохранятся).") % version,
-                                   parent=self.root):
+        question = (tr("Скачать и установить версию %s?\n\nПрограмма закроется, обновится и запустится "
+                       "снова (настройки и точки сохранятся).") if portable else
+                    tr("Скачать и установить версию %s?\n\nПрограмма закроется, а "
+                       "установщик обновит её (настройки и точки сохранятся)."))
+        if not messagebox.askyesno(APP, question % version, parent=self.root):
             return
         self.updating = True
         self.fisher.stop_fishing(tr("Обновление — рыбалка остановлена."), notify=False)
@@ -1836,9 +1840,14 @@ class App:
         def work():
             import tempfile
             import updates
+            folder = os.path.join(tempfile.gettempdir(), "TerrariaAutoFish-update")
             try:
-                path = updates.download(setup, os.path.join(tempfile.gettempdir(), "TerrariaAutoFish-update"),
-                                        lambda p: self.q.put(("update_progress", {"p": p})))
+                path = updates.download(asset, folder, lambda p: self.q.put(("update_progress", {"p": p})))
+                if portable:
+                    src = updates.extract_portable(path, os.path.join(folder, "portable-" + version))
+                    cmd = updates.portable_update_command(src, af.HERE, os.getpid())
+                    self.q.put(("update_ready", {"cmd": cmd}))
+                    return
             except Exception as e:
                 self.q.put(("update_ready", {"error": repr(e)}))
                 return
@@ -1851,7 +1860,10 @@ class App:
             self.add_log(tr("Не удалось скачать обновление: %s") % d["error"], "bad")
             return
         try:
-            subprocess.Popen([d["path"]], close_fds=True)
+            if d.get("cmd"):                      # портативная: заменит файлы, когда программа закроется
+                subprocess.Popen(d["cmd"], close_fds=True, creationflags=0x08000000)   # CREATE_NO_WINDOW
+            else:
+                subprocess.Popen([d["path"]], close_fds=True)
         except Exception as e:
             self.add_log(tr("Не удалось запустить установщик: %r") % e, "bad")
             return

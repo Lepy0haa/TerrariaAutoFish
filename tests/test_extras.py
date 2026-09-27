@@ -22,9 +22,9 @@ class TestUpdates(unittest.TestCase):
     def test_newer(self):
         old = updates.latest
         try:
-            updates.latest = lambda timeout=10: ("v9.0.0", "https://example/r", None)
-            self.assertEqual(updates.newer("1.3.2"), ("9.0.0", "https://example/r", None))
-            updates.latest = lambda timeout=10: ("v1.3.2", "https://example/r", None)
+            updates.latest = lambda timeout=10: ("v9.0.0", "https://example/r", {})
+            self.assertEqual(updates.newer("1.3.2"), ("9.0.0", "https://example/r", {}))
+            updates.latest = lambda timeout=10: ("v1.3.2", "https://example/r", {})
             self.assertIsNone(updates.newer("1.3.2"))
         finally:
             updates.latest = old
@@ -165,6 +165,36 @@ class TestMistake(unittest.TestCase):
             restore()
             for n, v in saved.items():
                 setattr(af, n, v)
+
+
+class TestPortableUpdate(unittest.TestCase):
+    def test_files_replaced_after_exit(self):
+        import subprocess
+        import sys
+        import tempfile
+        import updates
+        base = os.path.join(tempfile.mkdtemp(), "Моя папка O'Neil")
+        dest, src = os.path.join(base, "program"), os.path.join(base, "new")
+        for folder, files in ((dest, {"TerrariaAutoFish.exe": "old", "_internal/old.dll": "old",
+                                      "settings/settings.json": "мои настройки", "portable.txt": "p"}),
+                              (src, {"TerrariaAutoFish.exe": "new", "_internal/new.dll": "new",
+                                     "portable.txt": "p"})):
+            for name, text in files.items():
+                path = os.path.join(folder, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+        prog = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1.5)"])   # «программа»
+        upd = subprocess.Popen(updates.portable_update_command(src, dest, prog.pid, start=False),
+                               creationflags=0x08000000)
+        self.assertEqual(upd.wait(60), 0)
+        self.assertIsNotNone(prog.poll())                     # заменял только после закрытия
+        with open(os.path.join(dest, "TerrariaAutoFish.exe"), encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), "new")
+        self.assertTrue(os.path.exists(os.path.join(dest, "_internal", "new.dll")))
+        self.assertFalse(os.path.exists(os.path.join(dest, "_internal", "old.dll")))
+        with open(os.path.join(dest, "settings", "settings.json"), encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), "мои настройки")
 
 
 class TestHistory(unittest.TestCase):

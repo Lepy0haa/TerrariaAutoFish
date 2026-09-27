@@ -585,6 +585,7 @@ EN = {
     'Улов по дням (14 дней)': 'Catch by day (14 days)',
     'По часам суток': 'By hour of day',
     "процессор: %d%%": "CPU: %d%%",
+    'Скачать и установить версию %s?\n\nПрограмма закроется, обновится и запустится снова (настройки и точки сохранятся).': 'Download and install version %s?\n\nThe program will close, update and start again (settings and points are kept).',
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",
