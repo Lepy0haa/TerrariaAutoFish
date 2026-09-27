@@ -110,5 +110,28 @@ class TestFlow(unittest.TestCase):
         self.assertEqual(g.clicks[n:], [])
 
 
+
+class TestNoBiteReset(unittest.TestCase):
+    def test_back_to_original_bobber(self):
+        # из игры: образец «переучился» на кромку воды, программа 20 минут следила за пустым
+        # местом («Нет поклёвки 45 с» раз за разом). Теперь после 3 таких раз подряд —
+        # исходные образец и отметка поплавка
+        saved = {n: getattr(af, n) for n in ("REEL_DELAY", "MAX_WAIT", "HEALTH_GUARD", "BUFFS_ON")}
+        af.REEL_DELAY, af.MAX_WAIT, af.HEALTH_GUARD, af.BUFFS_ON = 0.3, 1.5, False, False
+        game = FakeGame(selected="5")
+        restore = game.install()
+        r = Run(game)
+        try:
+            r.toggle()
+            self.assertTrue(r.wait_for(r.waiting, 20), r.logs[-5:])
+            r.fisher.bobber = r.fisher.bobber * 0 + 50           # «переученный» образец
+            self.assertTrue(r.wait_for(lambda: any("исходному образцу" in l for l in r.logs), 30), r.logs[-5:])
+            self.assertTrue((r.fisher.bobber == r.fisher.bobber0).all())
+        finally:
+            r.stop()
+            restore()
+            for n, v in saved.items():
+                setattr(af, n, v)
+
 if __name__ == "__main__":
     unittest.main()

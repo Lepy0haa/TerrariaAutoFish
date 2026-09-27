@@ -79,7 +79,8 @@ Get it from [Releases](../../releases):
 
 The program is a folder: `TerrariaAutoFish.exe` and the `_internal` folder next to it (keep them
 together). It's not a single self-extracting exe and isn't packed with UPX — antivirus programs trust
-such builds more, and it starts faster.
+such builds more, and it starts faster. Everything the program writes itself — logs, debug pictures,
+records, hotbar snapshots, reports — goes to the `data` folder next to it.
 
 Python is not needed. Or run it from the source code (see [Running from source](#running-from-source)).
 
@@ -135,10 +136,10 @@ does not take focus away from the game.
 | Auto-calibration | The threshold is tuned automatically (recommended) |
 | Wait for a bite | After this time without a bite — reel in and cast again |
 | Small window, notifications, sounds | Ways to know what's happening |
-| Save debug pictures | Pictures of every search and hook in the `debug` folder — for troubleshooting |
-| Record mode | The program casts, you hook yourself; it records how the bobber behaved (`record` folder) |
+| Save debug pictures | Pictures of every search and hook in the `data\debug` folder — for troubleshooting |
+| Record mode | The program casts, you hook yourself; it records how the bobber behaved (`data\record` folder) |
 | Updates | Checks right away whether there is a newer version on GitHub (it also checks by itself once a day; only the public information about the latest release is read). If there is, the button becomes **Update to X**: it downloads the installer of the new version (the size is checked), starts it and closes the program so the installer can replace the files; settings and points are kept. The portable version opens the release page instead |
-| Collect a report | Packs the logs, settings, latest debug pictures, hotbar snapshots and system info into `report_….zip` next to the program — send it when something goes wrong. The log is also written to the `logs` folder (kept for 14 days) |
+| Collect a report | Packs the logs, settings, latest debug pictures, hotbar snapshots and system info into `report_….zip` in the `data` folder — send it when something goes wrong. The log is also written to `data\logs` (kept for 14 days) |
 
 ### Automation tab
 
@@ -146,7 +147,7 @@ does not take focus away from the game.
 |---|---|
 | Select the fishing rod automatically | Before every cast, if another hotbar slot is selected, the program presses the number key of the rod's slot (only while the game window is active; if the press got lost — once more, waiting a bit longer). If it doesn't work 3 times — it tries again in 2 minutes |
 | Fishing rod slot | **Auto:** while the slot is unknown, the program finds the rod in the hotbar by itself; then it remembers the slot from which a cast actually produced a bobber, and keeps it between launches. If after switching to that slot no bobber appears, the slot is forgotten and learned again. Or choose the slot number yourself |
-| Hotbar snapshot | In 3 s saves the in-game hotbar pixel for pixel to the `hotbar` folder next to the program (and how much each slot looks like a fishing rod) — send such snapshots to help tune fishing rod recognition |
+| Hotbar snapshot | In 3 s saves the in-game hotbar pixel for pixel to the `data\hotbar` folder (and how much each slot looks like a fishing rod) — send such snapshots to help tune fishing rod recognition |
 | Find the bobber automatically | After the first cast the program looks for the bobber between the character and the cast point using the Terraria Wiki bobber images. If it doesn't find it, it asks you to point at it as before |
 | Don't give up | After 3 failed casts in a row the program doesn't stop: it waits 2 s, goes back to the original mark and the original bobber image and tries again — round after round, without stopping. After 10 rounds in a row it sends one notification. It stops right away only if the rod shows no bait |
 | Resume when I return | If fishing paused because you switched to another window, it resumes 2 s after you return to the game |
@@ -181,7 +182,7 @@ has translation tables inside): Russian names on the Wiki often differ from the 
 the catch" on, the moment the text appears above the bobber also counts as a bite. A bite is let go
 only if the name was read confidently — otherwise it is hooked. Without the Sonar buff the program
 warns you (every 5 min). With "Save debug pictures" or in record
-mode every read is saved to `debug` / `record` (`…_sonar.png`, and the background `…_sonar_fon.png`) — send them if the
+mode every read is saved to `data\debug` / `data\record` (`…_sonar.png`, and the background `…_sonar_fon.png`) — send them if the
 program reads names wrong. Over lava and waves the background changes all the time; colors that are
 already nearby in the background snapshot are not taken for letters, so the text is noticed the
 moment it appears.
@@ -217,7 +218,10 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
    mark and checks that there really is a bobber blob there. The image is updated after every cast,
    so sunset and sunrise don't matter. In the dark, color thresholds are adapted to the brightness.
    If the bobber is not there, the program waits a moment and searches three times wider around the
-   original mark, and finally looks for the Wiki image of this particular bobber type. If it is still
+   original mark, and finally looks for the Wiki image of this particular bobber type. When the type is
+   known, a found place must look like its Wiki image (75%+) — so the remembered image can't
+   "learn" the water edge, which looks the same along the whole surface; after 3 recasts in a row
+   without a bite the original image and mark are restored. If it is still
    not found, the program compares the place with its picture from the last successful cast (phase
    correlation, without the character and the bobber): if the whole picture has moved, the cast point
    and the mark are moved by the same amount.
@@ -270,7 +274,7 @@ Settings are saved automatically in `%APPDATA%\TerrariaAutoFish` (portable versi
 | The antivirus complains | The program is built with PyInstaller and clicks the mouse for you — some antivirus programs react to that. It is built as a folder, without UPX and with version information to reduce false alarms. The best cure is a code signing certificate (for open-source projects there is a free one from SignPath Foundation — it has to be requested by the project's author). You can also run it from the source code |
 
 For a detailed analysis turn on **Save debug pictures** — pictures of every search (`poisk`) and
-hook (`poklevka`) appear in the `debug` folder next to the program.
+hook (`poklevka`) appear in the `data\debug` folder.
 
 ## Running from source
 
@@ -283,11 +287,11 @@ python src/app.py
 
 A console version without a window: `scripts\start.bat` (also `start_debug.bat`, `start_record.bat`).
 Fine-tuning constants are at the top of `src/autofish.py`. Logs, debug pictures and snapshots are
-written to the `program` folder.
+written to the `data` folder.
 
 `build.bat` builds everything into the `dist` folder: the `TerrariaAutoFish` program folder, the
 installer and the portable zip (`build.bat --no-pause` doesn't wait for a key at the end), and puts
-the fresh program into the `program` folder (if it isn't running).
+the fresh program (`TerrariaAutoFish.exe` and `_internal`) into the project folder (if it isn't running).
 
 On GitHub every change runs all tests (`.github/workflows/build.yml`). Pushing a version tag
 (`v1.5.0`) also builds the installer and the portable version on GitHub's servers; the release is
@@ -296,7 +300,7 @@ taken from `docs/releases/<tag>.md`).
 
 ### Tests
 
-`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 102 tests in about four minutes, most of them on
+`scripts\run_tests.bat` (or `python -m unittest discover -s tests`) runs 104 tests in about four minutes, most of them on
 real data from the game in `tests/data`: hotbar snapshots with different selected slots, recorded
 bites, bobber search zones and a wide scene with a pier. Full scenarios (start, pause and resume,
 taking the rod back, a bite, running out of bait, night, potions, the Sonar Potion, the Angler quest,
@@ -324,7 +328,7 @@ bait numbers, and check that every message is translated to English.
 | `tests/` | Tests and real data from the game |
 | `docs/` | Screenshots and release descriptions (`docs/releases`) |
 | `build.bat`, `.github/workflows/build.yml` | Building; automatic tests and builds on GitHub |
-| `program/`, `dist/` | Not in the repository: the built program with its logs and pictures; build results |
+| `TerrariaAutoFish.exe`, `_internal/`, `data/`, `dist/` | Not in the repository: the built program, what it writes (logs, pictures, snapshots), build results |
 
 ## Important
 

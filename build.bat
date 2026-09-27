@@ -1,9 +1,9 @@
 @echo off
 rem Builds the program (folder TerrariaAutoFish: exe + _internal), the installer and the portable zip into dist,
-rem and puts the fresh program into the "program" folder (if it is not running).
+rem and puts the fresh program (TerrariaAutoFish.exe + _internal) into the project folder (if it is not running).
 rem Requires Python 3.10+. "build.bat --no-pause" does not wait for a key at the end (automatic builds).
 cd /d "%~dp0"
-set VER=1.5.0
+set VER=1.5.1
 set NOPAUSE=
 if "%~1"=="--no-pause" set NOPAUSE=1
 set WORK=%~dp0dist\_build
@@ -35,13 +35,13 @@ copy /y "%~dp0README.ru.md" "%~dp0dist\portable\TerrariaAutoFish\" >nul
 powershell -NoProfile -Command "Compress-Archive -Force -Path '%~dp0dist\portable\TerrariaAutoFish' -DestinationPath '%~dp0dist\TerrariaAutoFish-%VER%-portable.zip'" || goto :error
 rmdir /s /q "%~dp0dist\portable" "%WORK%"
 
-rem The fresh program into "program" (its logs, debug pictures and snapshots stay there).
+rem The fresh program into the project folder (what it writes itself is in "data").
 tasklist /fi "imagename eq TerrariaAutoFish.exe" | find /i "TerrariaAutoFish.exe" >nul
 if errorlevel 1 (
-  rmdir /s /q "%~dp0program\_internal" 2>nul
-  xcopy /e /i /q /y "%~dp0dist\TerrariaAutoFish" "%~dp0program" >nul
+  rmdir /s /q "%~dp0_internal" 2>nul
+  xcopy /e /i /q /y "%~dp0dist\TerrariaAutoFish" "%~dp0." >nul
 ) else (
-  echo TerrariaAutoFish is running - the "program" folder was not updated.
+  echo TerrariaAutoFish is running - TerrariaAutoFish.exe in the project folder was not updated.
 )
 echo.
 echo Done: dist\TerrariaAutoFish-%VER%-setup.exe and dist\TerrariaAutoFish-%VER%-portable.zip

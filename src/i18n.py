@@ -531,6 +531,8 @@ EN = {
     "Марсиане": "Martians",
     "Небесные существа": "Celestial creatures",
     "Босс": "Boss",
+    "%d раза подряд без поклёвки — вернулся к исходному образцу и отметке поплавка.":
+        "%d times in a row without a bite — went back to the original bobber image and mark.",
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

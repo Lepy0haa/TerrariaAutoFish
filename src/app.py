@@ -25,13 +25,13 @@ import i18n
 from i18n import tr
 
 APP = "Terraria AutoFish"
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 # Портативная версия: рядом с программой лежит portable.txt — всё хранится в папке программы
 PORTABLE = os.path.exists(os.path.join(af.HERE, "portable.txt"))
 CFG_DIR = (os.path.join(af.HERE, "settings") if PORTABLE
            else os.path.join(os.environ.get("APPDATA") or af.HERE, "TerrariaAutoFish"))
 CFG_PATH = os.path.join(CFG_DIR, "settings.json")
-LOG_DIR = os.path.join(af.HERE, "logs")    # журналы — рядом с программой, как debug и record
+LOG_DIR = os.path.join(af.DATA_DIR, "logs")   # журналы — в data рядом с программой, как debug и record
 LOG_DAYS = 14                              # столько дней журналы хранятся
 DEFAULTS = {
     "hotkey": "home", "reset_key": "end", "scale": 1.0, "sink_ratio": 0.55, "max_wait": 45,
@@ -596,7 +596,7 @@ class App:
         self.pause_btn = ttk.Button(btns, text=tr("⏸ Пауза"), command=self.pause)
         self.pause_btn.pack(side="left", padx=6)
         ttk.Button(btns, text=tr("↺ Новые точки"), command=self.new_points).pack(side="left")
-        ttk.Button(btns, text=tr("Папка"), command=lambda: os.startfile(af.HERE)).pack(side="right")
+        ttk.Button(btns, text=tr("Папка"), command=self.open_data).pack(side="right")
 
         # журнал
         lg = self.card(p, fill="both", expand=True, pady=(6, 0))
@@ -941,9 +941,15 @@ class App:
         refresh()
         self.catch_win = win
 
+    def open_data(self):
+        """Папка data: журналы, отладочные картинки, снимки хотбара, отчёты."""
+        os.makedirs(af.DATA_DIR, exist_ok=True)
+        os.startfile(af.DATA_DIR)
+
     def save_catch_csv(self):
         import csv
-        path = os.path.join(af.HERE, time.strftime("catch_%Y%m%d_%H%M%S.csv"))
+        os.makedirs(af.DATA_DIR, exist_ok=True)
+        path = os.path.join(af.DATA_DIR, time.strftime("catch_%Y%m%d_%H%M%S.csv"))
         try:
             with open(path, "w", encoding="utf-8-sig", newline="") as fh:
                 w = csv.writer(fh, delimiter=";")
@@ -1205,7 +1211,7 @@ class App:
                 return
             with (getattr(mss, "MSS", None) or mss.mss)() as sct:
                 frame = self.fisher.hotbar_frame(sct, af.client_rect(hwnd))
-            folder = os.path.join(af.HERE, "hotbar")
+            folder = os.path.join(af.DATA_DIR, "hotbar")
             name = time.strftime("hotbar_%Y%m%d_%H%M%S")
             try:
                 af.save_png(frame, os.path.join(folder, name + ".png"))
@@ -1676,7 +1682,8 @@ class App:
                 return []
             return sorted(files, key=os.path.getmtime)[-n:]
 
-        path = os.path.join(af.HERE, time.strftime("report_%Y%m%d_%H%M%S.zip"))
+        os.makedirs(af.DATA_DIR, exist_ok=True)
+        path = os.path.join(af.DATA_DIR, time.strftime("report_%Y%m%d_%H%M%S.zip"))
         try:
             with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
                 for f in newest(LOG_DIR, 3, (".log",)):
@@ -1687,7 +1694,7 @@ class App:
                     if os.path.exists(f):
                         z.write(f, "settings/" + name)
                 for sub, n in (("debug", 40), ("record", 40), ("hotbar", 20)):
-                    for f in newest(os.path.join(af.HERE, sub), n):
+                    for f in newest(os.path.join(af.DATA_DIR, sub), n):
                         z.write(f, sub + "/" + os.path.basename(f))
                 z.writestr("system.txt", self.system_info())
         except Exception as e:

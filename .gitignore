@@ -17,6 +17,7 @@ settings/
 *.npz
 !/assets/*.npz
 /program/
+/data/
 /hotbar/
 /logs/
 /report_*.zip

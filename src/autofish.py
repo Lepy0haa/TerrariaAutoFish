@@ -111,6 +111,7 @@ ZOOMS = (1.0, 1.25, 1.5, 1.75, 2.0)   # какие бывают (игра не �
 EVENTS_STOP = True        # событие в чате (луны, затмение, вторжения, боссы) — вытащить поплавок и переждать
 DEATH_STOP = True         # персонаж погиб — остановить рыбалку совсем (без самопродолжения)
 CHAT_EVERY = 2.0          # как часто смотреть в чат, секунд
+NO_BITE_RESET = 3     # столько перезабросов подряд без поклёвки — вернуться к исходному образцу поплавка
 FOLLOW_SHIFT = True   # вся картинка сдвинулась (персонажа сдвинуло) — перенести точки на столько же
 SHIFT_MIN = 3         #   ...если сдвиг хотя бы столько пикселей
 ROD_KEY_WAITS = (0.3, 0.5, 0.8)   # взять удочку: попыток нажать цифру слота и сколько ждать после каждой
@@ -144,16 +145,17 @@ except Exception:
 
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
-# папка программы: рядом с .exe или со скриптом
-# Папки: SRC — исходники (src), ROOT — корень проекта. Собранная программа хранит журналы,
-# отладочные картинки и снимки рядом с собой; запущенная из исходников — в папке program проекта.
+# Папки: SRC — исходники (src), ROOT — корень проекта, HERE — папка программы (где .exe; из
+# исходников — корень проекта). Всё, что программа пишет сама (журналы, отладочные картинки,
+# записи, снимки хотбара, отчёты), — в одной папке DATA_DIR рядом с ней.
 SRC = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SRC)
-HERE = (os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.join(ROOT, "program"))
-DEBUG_DIR = os.path.join(HERE, "debug")
+HERE = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else ROOT
+DATA_DIR = os.path.join(HERE, "data")
+DEBUG_DIR = os.path.join(DATA_DIR, "debug")
 # картинки (иконки баффов): внутри .exe — во временной папке PyInstaller, иначе — рядом со скриптом
 ASSET_DIR = os.path.join(getattr(sys, "_MEIPASS", ROOT), "assets")
-RECORD_DIR = os.path.join(HERE, "record")
+RECORD_DIR = os.path.join(DATA_DIR, "record")
 
 
 def log(msg):
@@ -428,6 +430,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
         self.hotbar_u = None               # масштаб интерфейса, при котором видели хотбар
         self.rod_misses = 0                # сколько раз подряд не получилось взять удочку
         self.scene = None                  # снимок места рыбалки (см. follow_shift)
+        self.no_bite = 0                   # перезабросов подряд без поклёвки
         self.zoom_probe = False            # идёт первый автопоиск — пробуем все масштабы
         self.shifts = 0                    # сколько раз переносили точки за сдвигом картинки
         self.rod_miss_time = 0.0            # когда не получилось взять удочку клавишей
@@ -940,6 +943,17 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
             if now - start > max_wait:
                 self.learn(calm, now - start + 1.0)
                 self.reel(tr("Нет поклёвки %d с — перезаброс.") % max_wait)
+                self.no_bite += 1
+                if self.no_bite >= NO_BITE_RESET and (self.bobber0 is not None or self.mark0 is not None):
+                    # так долго без поклёвок обычно не бывает: вероятно, следим не за поплавком
+                    # (образец «переучился» на фон) — возвращаемся к исходным образцу и отметке
+                    self.no_bite = 0
+                    if self.bobber0 is not None:
+                        self.bobber = self.bobber0.copy()
+                    if self.mark0 is not None:
+                        self.mark = self.mark0
+                    self.log(tr("%d раза подряд без поклёвки — вернулся к исходному образцу и отметке поплавка.")
+                             % NO_BITE_RESET, "bad")
                 return
             if self.record:
                 try:
@@ -1011,6 +1025,7 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
                     why = "%s, %s" % (self.catch_name(dec[0]), why)
                 hooked_id = dec[0] if dec is not None else None
                 self.hooks += 1
+                self.no_bite = 0
                 self.stats()
                 self.state("hook", tr("Поклёвка!"), tr("Подсекаю…"))
                 self.emit("hook", why=why, waited=t)

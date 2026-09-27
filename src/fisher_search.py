@@ -54,9 +54,20 @@ class SearchMixin:
                     hit, blob = cand, True
                     break
                 continue
-            if err <= A.NOT_FOUND_ERR and not strict:
+            # без пятна — только по образцу; если вид поплавка известен, проверяем и по картинке:
+            # образец мог «переучиться» на кромку воды, а она одинаковая по всей ширине
+            if err <= A.NOT_FOUND_ERR and not strict and (not self.bobber_kind or self.bobber_here(frame, x, y)):
                 hit = (x, y)
                 break
+        if hit is not None and wide and self.bobber_kind and self.bobber_sprites is not None:
+            # широкий поиск: если в зоне есть место, намного больше похожее на поплавок по картинке
+            # с Вики, — берём его (иначе можно «найти» пустое место рядом с настоящим поплавком)
+            here = self.bobber_score(frame, *hit) or 0.0
+            best = self.sprite_search(frame, only=[self.bobber_kind])
+            if best is not None and best[0] >= A.SPRITE_MIN and best[0] > here + 0.1:
+                hit = (int(np.clip(best[1] - tw // 2, 0, frame.shape[1] - tw)),
+                       int(np.clip(best[2] - th // 4 - th // 2, 0, frame.shape[0] - th)))
+                blob = True
         if hit is None and self.bobber_kind and self.bobber_sprites is not None:
             # по образцу не нашёлся — ищем по картинке этого вида поплавка с Вики во всей зоне
             best = self.sprite_search(frame, only=[self.bobber_kind])
@@ -89,15 +100,25 @@ class SearchMixin:
                      % (pos, best_err, tr("есть") if blob else tr("нет"), tr(" (широкий поиск)") if wide else ""))
         return pos, best_err
 
+    def bobber_score(self, frame, x, y):
+        """Насколько место с левым верхним углом (x, y) похоже на картинку этого вида поплавка с
+        Вики (None — вид неизвестен)."""
+        if not self.bobber_kind or self.bobber_sprites is None:
+            return None
+        tw, th = self.tw, self.th
+        pad = int(6 * self.scale)
+        patch = frame[max(0, y - pad):y + th + pad, max(0, x - pad):x + tw + pad]
+        r = self.bobber_sprites.find(patch, self.sprite_scales(), only=[self.bobber_kind])
+        return r[0] if r is not None else 0.0
+
     def bobber_here(self, frame, x, y):
         """Наш ли поплавок в кадре frame с левым верхним углом (x, y): по картинке этого вида
         поплавка с Вики (не зависит от освещения), а если вид неизвестен — по цветам."""
         tw, th = self.tw, self.th
-        if self.bobber_kind and self.bobber_sprites is not None:
-            pad = int(10 * self.scale)
-            patch = frame[max(0, y - pad):y + th + pad, max(0, x - pad):x + tw + pad]
-            r = self.bobber_sprites.find(patch, self.sprite_scales(), only=[self.bobber_kind])
-            return r is not None and r[0] >= A.SPRITE_MIN - 0.1
+        score = self.bobber_score(frame, x, y)
+        if score is not None:
+            # порог — как при узнавании поплавка: пустая кромка воды в темноте даёт около 0.7
+            return score >= A.SPRITE_MIN
         block = frame[y:y + th, x:x + tw]
         ref = self.bobber0 if self.bobber0 is not None else self.bobber
         if ref is None or A.same_colors(block, ref):

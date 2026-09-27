@@ -41,6 +41,22 @@ class TestBobber(unittest.TestCase):
         self.assertLessEqual(abs(best[1] - 276), 4)
         self.assertLessEqual(abs(best[2] - 175), 4)
 
+    def test_template_drifted_to_water_edge(self):
+        # из игры (пещера): широкий поиск взял пустое место на кромке воды рядом с настоящим
+        # поплавком, образец «переучился» на кромку, и программа следила за пустым местом
+        frame = load_bgr("bobber", "cave_wrong_wide.png", down=4)
+        f = af.Fisher()
+        f.bobber_kind = "acc_glowing"
+        self.assertFalse(f.bobber_here(frame, 88, 86))         # пустая кромка
+        self.assertTrue(f.bobber_here(frame, 112, 90))         # настоящий поплавок
+        f.bobber = frame[86:86 + f.th, 88:88 + f.tw].copy()    # переученный образец
+        f.bobber0 = frame[90:90 + f.th, 112:112 + f.tw].copy()
+        H, W = frame.shape[:2]
+        pos, _ = f.search(FakeSct(lambda: frame), (0, 0, W, H), (W // 2, H // 2), W // 2 - 10, H // 2 - 14,
+                          wide=True)
+        self.assertIsNotNone(pos)
+        self.assertLessEqual(abs(pos[0] - 119), 4, pos)
+
     def test_empty_water(self):
         best = self.f.sprite_search(load_bgr("bobber", "027_poisk_net.png", down=4))
         self.assertTrue(best is None or best[0] < af.SPRITE_MIN)
