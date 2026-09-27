@@ -48,7 +48,7 @@ SETTLE_MIN = 0.6      # сек. после заброса, раньше кото
 CALIB_TIME = 0.3      # сек. замера, сколько поплавка видно обычно
 MAX_WAIT = 45.0       # сек. без поклёвки -> вытащить и забросить заново
 REEL_DELAY = 0.7      # сек. после подсечки до нового заброса
-POLL = 0.005          # сек. между снимками при ожидании поклёвки
+POLL = 1 / 60.0       # сек. между снимками при ожидании поклёвки (игра рисует 60 кадров в секунду)
 
 ZONE_X = 40           # насколько далеко от отметки (px при SCALE=1) может упасть поплавок по горизонтали
 ZONE_Y = 30           # ...и по вертикали
@@ -197,10 +197,15 @@ def click(x, y, hold=0.06):
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
 
 
+_exe_names = {}   # pid -> имя .exe (окно игры проверяется на каждом снимке — не спрашиваем Windows зря)
+
+
 def window_exe(hwnd):
     """Имя .exe процесса, которому принадлежит окно (в нижнем регистре), и его pid."""
     pid = wt.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value in _exe_names:
+        return _exe_names[pid.value], pid.value
     name = ""
     h = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
     if h:
@@ -211,6 +216,10 @@ def window_exe(hwnd):
                 name = os.path.basename(buf.value).lower()
         finally:
             ctypes.windll.kernel32.CloseHandle(h)
+    if name:
+        if len(_exe_names) > 200:
+            _exe_names.clear()
+        _exe_names[pid.value] = name
     return name, pid.value
 
 
@@ -1081,7 +1090,8 @@ class Fisher(GearMixin, SearchMixin, ExtrasMixin, CatchMixin):
                     caught_id = self.pickup_read(sct, pk)    # что поймано — для учёта и биома
                 self.check_quest(caught_id or hooked_id)
                 return
-            time.sleep(POLL)
+            # ровный шаг: не чаще 60 снимков в секунду (чаще игра кадр не меняет — только нагрузка)
+            time.sleep(max(0.0, now + POLL - time.perf_counter()))
 
 
     # ---------- режим записи ----------

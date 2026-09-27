@@ -1720,6 +1720,8 @@ class App:
             parts.append(tr("Неудачных забросов подряд: %d из %d") % (s["fails"], af.MAX_FAILS))
         if s.get("skipped"):
             parts.append(tr("Пропущено по сонару: %d") % s["skipped"])
+        if getattr(self, "cpu", None) is not None and self.fisher.running.is_set():
+            parts.append(tr("процессор: %d%%") % self.cpu)
         self.fails_lbl.config(text=" · ".join(parts))
         if self.overlay:
             self.overlay.count.config(text=tr("Подсечек: %d") % s["hooks"])
@@ -1736,6 +1738,14 @@ class App:
             self.stat_lbls["time"].config(text="0:00:00")
             self.stat_lbls["rate"].config(text="—")
         if reschedule:
+            # нагрузка на процессор (всей программы, в процентах одного ядра) — раз в 5 с
+            now, cpu = time.perf_counter(), time.process_time()
+            last = getattr(self, "cpu_mark", None)
+            if last is None or now - last[0] >= 5:
+                if last is not None:
+                    self.cpu = round(100 * (cpu - last[1]) / (now - last[0]))
+                    self.show_stats()
+                self.cpu_mark = (now, cpu)
             self.root.after(1000, self.tick)
 
     def add_log(self, text, kind="info", stamp=None):
