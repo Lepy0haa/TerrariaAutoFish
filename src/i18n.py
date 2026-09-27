@@ -211,7 +211,6 @@ EN = {
     "Уведомление о каждой подсечке": "Notification for every hook",
     "Звуки: старт, отметка, пауза": "Sounds: start, mark, pause",
     "Звук при подсечке": "Sound on hook",
-    "Сохранять отладочные картинки (папка debug)": "Save debug pictures (debug folder)",
     "Режим записи: подсекаю я сам": "Record mode: I hook myself",
     "Проверить уведомление": "Test notification",
 
@@ -572,6 +571,14 @@ EN = {
     "Чат: «%s» — %s.": "Chat: «%s» — %s.",
     "событие «%s»": "event «%s»",
     "не событие": "not an event",
+    'Сохранять отладочные картинки (папка data\\debug)': 'Save debug pictures (data\\debug folder)',
+    'непрозрачность': 'opacity',
+    'текст': 'text',
+    'мелкий': 'small',
+    'обычный': 'normal',
+    'крупный': 'large',
+    'режим работы': 'mode',
+    'прятать на паузе': 'hide when paused',
     # --- подписи на двух языках сразу (выбор языка) — одинаковы в обоих
     "Авто / Auto": "Авто / Auto",
     "Русский": "Русский",

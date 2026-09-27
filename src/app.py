@@ -47,6 +47,7 @@ DEFAULTS = {
     "sonar_filter": False, "catch_biome": "auto", "catch_want": {}, "quest_fish": None,
     "update_checked": 0, "wizard_done": False, "tray": True, "inv_full_stop": True,
     "potion_remind": True, "events_stop": True, "death_stop": True,
+    "overlay_alpha": 90, "overlay_font": "normal", "overlay_mode": True, "overlay_hide_paused": False,
 }
 LANGS = [("auto", tr("Авто / Auto")), ("ru", tr("Русский")), ("en", "English")]
 HOTKEYS = ["home", "end", "insert", "delete", "page_up", "page_down", "pause", "scroll_lock",
@@ -272,24 +273,26 @@ class Overlay(tk.Toplevel):
         self.app = app
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.attributes("-alpha", 0.9)
+        self.attributes("-alpha", max(0.3, min(1.0, int(app.cfg.get("overlay_alpha", 90)) / 100.0)))
+        k = {"small": 0.85, "large": 1.25}.get(app.cfg.get("overlay_font"), 1.0)
+        big, mid, small = round(11 * k), round(9 * k), round(8 * k)
         self.configure(bg=C["panel"], highlightthickness=1, highlightbackground=C["line"])
         top = tk.Frame(self, bg=C["panel"])
         top.pack(fill="x", padx=10, pady=(8, 2))
         self.dot = tk.Canvas(top, width=12, height=12, bg=C["panel"], highlightthickness=0)
         self.dot.pack(side="left")
-        self.title = tk.Label(top, text=tr("Готов"), bg=C["panel"], fg=C["text"], font=(FONT, 11, "bold"))
+        self.title = tk.Label(top, text=tr("Готов"), bg=C["panel"], fg=C["text"], font=(FONT, big, "bold"))
         self.title.pack(side="left", padx=6)
-        self.count = tk.Label(top, text=tr("Подсечек: 0"), bg=C["panel"], fg=C["text"], font=(FONT, 11, "bold"))
+        self.count = tk.Label(top, text=tr("Подсечек: 0"), bg=C["panel"], fg=C["text"], font=(FONT, big, "bold"))
         self.count.pack(side="right")
-        self.hint = tk.Label(self, text="", bg=C["panel"], fg=C["muted"], font=(FONT, 9),
-                             wraplength=250, justify="left", anchor="w")
+        self.hint = tk.Label(self, text="", bg=C["panel"], fg=C["muted"], font=(FONT, mid),
+                             wraplength=round(250 * k), justify="left", anchor="w")
         self.hint.pack(fill="x", padx=10)
-        self.bar = Bar(self, width=250, height=10)
+        self.bar = Bar(self, width=round(250 * k), height=10)
         self.bar.pack(padx=10, pady=(4, 8))
         # режим работы: что ловим, зелья, что отслеживается, когда остановиться
-        self.mode = tk.Label(self, text="", bg=C["panel"], fg=C["muted"], font=(FONT, 8),
-                             wraplength=250, justify="left", anchor="w")
+        self.mode = tk.Label(self, text="", bg=C["panel"], fg=C["muted"], font=(FONT, small),
+                             wraplength=round(250 * k), justify="left", anchor="w")
         for w in (self, top, self.title, self.hint, self.count, self.dot, self.mode):
             w.bind("<ButtonPress-1>", self.drag_start)
             w.bind("<B1-Motion>", self.drag)
@@ -705,13 +708,15 @@ class App:
                           ("toast_hooks", tr("Уведомление о каждой подсечке")),
                           ("sound", tr("Звуки: старт, отметка, пауза")),
                           ("hook_sound", tr("Звук при подсечке")),
-                          ("debug", tr("Сохранять отладочные картинки (папка debug)")),
+                          ("debug", tr("Сохранять отладочные картинки (папка data\\debug)")),
                           ("record", tr("Режим записи: подсекаю я сам"))):
             var = tk.BooleanVar(value=bool(self.cfg[key]))
             ttk.Checkbutton(box, text=text, variable=var, command=lambda k=key: self.set_check(k)).grid(
                 row=row, column=0, columnspan=2, sticky="w")
             self.checks[key] = var
             row += 1
+            if key == "overlay":
+                row = self.build_overlay_opts(box, row)
         bf = ttk.Frame(box, style="Card.TFrame")
         bf.grid(row=row, column=0, columnspan=2, sticky="we", pady=(6, 0))
         ttk.Button(bf, text=tr("Проверить уведомление"), command=lambda: toast(
@@ -1243,7 +1248,41 @@ class App:
 
     def refresh_mode(self):
         if getattr(self, "overlay", None) is not None:
-            self.overlay.set_mode(self.mode_lines())
+            self.overlay.set_mode(self.mode_lines() if self.cfg.get("overlay_mode", True) else [])
+
+    def build_overlay_opts(self, box, row):
+        """Под «Окошко поверх игры»: прозрачность, размер текста, режим работы, прятать на паузе."""
+        opts = ttk.Frame(box, style="Card.TFrame")
+        opts.grid(row=row, column=0, columnspan=2, sticky="w", padx=(22, 0))
+        ttk.Label(opts, text=tr("непрозрачность"), style="Muted.TLabel").pack(side="left")
+        alphas = ["100%", "90%", "80%", "70%", "60%", "50%"]
+        av = tk.StringVar(value="%d%%" % int(self.cfg["overlay_alpha"]))
+        cb = ttk.Combobox(opts, textvariable=av, values=alphas, state="readonly", width=5)
+        cb.pack(side="left", padx=(4, 12))
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_overlay_opt("overlay_alpha", int(av.get().rstrip("%"))))
+        ttk.Label(opts, text=tr("текст"), style="Muted.TLabel").pack(side="left")
+        fonts = [("small", tr("мелкий")), ("normal", tr("обычный")), ("large", tr("крупный"))]
+        fv = tk.StringVar(value=dict(fonts).get(self.cfg["overlay_font"], fonts[1][1]))
+        cb = ttk.Combobox(opts, textvariable=fv, values=[t for _, t in fonts], state="readonly", width=9)
+        cb.pack(side="left", padx=(4, 0))
+        cb.bind("<<ComboboxSelected>>", lambda e: self.set_overlay_opt(
+            "overlay_font", {t: k for k, t in fonts}[fv.get()]))
+        row += 1
+        opts2 = ttk.Frame(box, style="Card.TFrame")
+        opts2.grid(row=row, column=0, columnspan=2, sticky="w", padx=(22, 0))
+        for key, text in (("overlay_mode", tr("режим работы")), ("overlay_hide_paused", tr("прятать на паузе"))):
+            var = tk.BooleanVar(value=bool(self.cfg[key]))
+            ttk.Checkbutton(opts2, text=text, variable=var,
+                            command=lambda k=key, v=var: self.set_overlay_opt(k, v.get())).pack(side="left", padx=(0, 12))
+        return row + 1
+
+    def set_overlay_opt(self, key, value):
+        self.cfg[key] = value
+        save_cfg(self.cfg)
+        if self.overlay is not None:              # размер текста — заново построить окошко
+            self.overlay.destroy()
+            self.overlay = None
+        self.toggle_overlay()
 
     def buff_text(self, status):
         names = {"fishing": tr("рыбалки"), "crate": tr("ящиков"), "sonar": tr("сонара"), "calm": tr("спокойствия")}
@@ -1618,6 +1657,11 @@ class App:
             self.overlay.set_state(state, title, hint)
             if state != "wait":
                 self.overlay.bar.set(None, thr)
+            # на паузе окошко можно прятать — чтобы не мешало играть самому
+            if self.cfg.get("overlay_hide_paused") and state in ("pause", "idle"):
+                self.overlay.withdraw()
+            else:
+                self.overlay.deiconify()
 
     def show_stats(self):
         s = self.stats
